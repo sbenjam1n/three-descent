@@ -7,6 +7,8 @@ import {
 	GAUGE_SHIELDS, GAUGE_INVULNERABLE, GAUGE_ENERGY_LEFT, GAUGE_ENERGY_RIGHT,
 	GAUGE_NUMERICAL, GAUGE_BLUE_KEY, GAUGE_GOLD_KEY, GAUGE_RED_KEY,
 	GAUGE_BLUE_KEY_OFF, GAUGE_GOLD_KEY_OFF, GAUGE_RED_KEY_OFF,
+	SB_GAUGE_BLUE_KEY, SB_GAUGE_GOLD_KEY, SB_GAUGE_RED_KEY,
+	SB_GAUGE_BLUE_KEY_OFF, SB_GAUGE_GOLD_KEY_OFF, SB_GAUGE_RED_KEY_OFF,
 	SB_GAUGE_ENERGY, GAUGE_LIVES, GAUGE_SHIPS,
 	RETICLE_CROSS, RETICLE_PRIMARY, RETICLE_SECONDARY,
 	GAUGE_HOMING_WARNING_ON, GAUGE_HOMING_WARNING_OFF,
@@ -20,7 +22,7 @@ import { hud_update_timers, hud_has_messages, hud_draw_messages } from './hud.js
 // Cockpit modes (from GAME.H)
 const CM_FULL_COCKPIT = 0;
 const CM_REAR_VIEW = 1;
-// const CM_STATUS_BAR = 2;
+const CM_STATUS_BAR = 2;
 const CM_FULL_SCREEN = 3;
 
 let _cockpitMode = CM_FULL_COCKPIT;
@@ -404,6 +406,10 @@ export function gauges_draw( dt ) {
 		drawWeaponInfo( ctx, 1 );
 		drawHomingWarning( ctx );
 
+	} else if ( _cockpitMode === CM_STATUS_BAR ) {
+
+		drawStatusBarHUD( ctx );
+
 	} else {
 
 		// Full screen mode: draw compact text-based HUD info instead of cockpit
@@ -610,6 +616,70 @@ function drawFullScreenHUD( ctx ) {
 	ctx.textAlign = 'left';
 
 	// Homing warning still needed
+	drawHomingWarning( ctx );
+
+}
+
+function drawStatusBarHUD( ctx ) {
+
+	// Draw status bar background strip at the bottom of the 320x200 canvas.
+	let barY = COCKPIT_H - 40;
+	const sbCockpitIdx = cockpit_bitmap[ CM_STATUS_BAR ];
+
+	if ( sbCockpitIdx >= 0 ) {
+
+		const bm = getBitmapCanvas( sbCockpitIdx );
+		if ( bm !== null ) {
+
+			barY = COCKPIT_H - bm.height;
+			ctx.drawImage( bm, 0, barY );
+
+		} else {
+
+			ctx.fillStyle = '#000000';
+			ctx.fillRect( 0, barY, COCKPIT_W, 40 );
+
+		}
+
+	} else {
+
+		ctx.fillStyle = '#000000';
+		ctx.fillRect( 0, barY, COCKPIT_W, 40 );
+
+	}
+
+	// Status bar key icons use SB_GAUGE_* assets.
+	const sbBlueIdx = Gauges[ _keysBlue === true ? SB_GAUGE_BLUE_KEY : SB_GAUGE_BLUE_KEY_OFF ];
+	const sbGoldIdx = Gauges[ _keysGold === true ? SB_GAUGE_GOLD_KEY : SB_GAUGE_GOLD_KEY_OFF ];
+	const sbRedIdx = Gauges[ _keysRed === true ? SB_GAUGE_RED_KEY : SB_GAUGE_RED_KEY_OFF ];
+
+	if ( sbBlueIdx >= 0 ) drawBitmapComposited( ctx, sbBlueIdx, 6, barY + 7 );
+	if ( sbGoldIdx >= 0 ) drawBitmapComposited( ctx, sbGoldIdx, 19, barY + 7 );
+	if ( sbRedIdx >= 0 ) drawBitmapComposited( ctx, sbRedIdx, 32, barY + 7 );
+
+	// Optional status bar energy frame bitmap from original gauge table.
+	const sbEnergyIdx = Gauges[ SB_GAUGE_ENERGY ];
+	if ( sbEnergyIdx >= 0 ) drawBitmapComposited( ctx, sbEnergyIdx, 48, barY + 5 );
+
+	ctx.font = '6px monospace';
+	ctx.textBaseline = 'top';
+	ctx.textAlign = 'left';
+	ctx.fillStyle = '#00cc00';
+	ctx.fillText( 'SH ' + Math.max( 0, Math.floor( _shields ) ), 52, barY + 7 );
+	ctx.fillText( 'EN ' + Math.max( 0, Math.floor( _energy ) ), 52, barY + 15 );
+
+	// Compact weapon text at right side.
+	let primaryName = PRIMARY_NAMES[ _primaryWeapon ] || 'LASER';
+	if ( _primaryWeapon === 0 && _quadLasers === true ) primaryName = 'QUAD';
+	if ( _primaryWeapon === 1 ) primaryName = 'VUL ' + _vulcanAmmo;
+
+	const secondaryName = ( SECONDARY_NAMES[ _secondaryWeapon ] || 'CONCUSSION' ).replace( '\n', ' ' );
+	const secondaryAmmo = _secondaryAmmo[ _secondaryWeapon ];
+
+	ctx.textAlign = 'right';
+	ctx.fillText( primaryName, COCKPIT_W - 6, barY + 7 );
+	ctx.fillText( secondaryName + ' x' + secondaryAmmo, COCKPIT_W - 6, barY + 15 );
+
 	drawHomingWarning( ctx );
 
 }
@@ -824,8 +894,11 @@ function drawReticle( ctx ) {
 	// Draw reticle at center of game view
 	// Ported from: GAUGES.C show_reticle() lines 1821-1869
 	const cx = COCKPIT_W / 2;
-	// In cockpit mode, 3D viewport is top 70% — center at y=70 in 320x200 space
-	const cy = ( _cockpitMode === CM_FULL_COCKPIT || _cockpitMode === CM_REAR_VIEW ) ? 70 : COCKPIT_H / 2;
+	// In full cockpit mode, 3D viewport is top 70% — center at y=70 in 320x200 space.
+	// In status bar mode, gameplay window is top 160px.
+	let cy = COCKPIT_H / 2;
+	if ( _cockpitMode === CM_FULL_COCKPIT || _cockpitMode === CM_REAR_VIEW ) cy = 70;
+	if ( _cockpitMode === CM_STATUS_BAR ) cy = 80;
 
 	// Determine primary weapon readiness (has energy/ammo)
 	// Ported from: player_has_weapon() — check energy for energy weapons, ammo for vulcan
@@ -879,19 +952,27 @@ function drawReticle( ctx ) {
 	// Ported from: GAUGES.C line 1848
 	const crossReady = ( primaryReady > 0 || secondaryReady > 0 ) ? 1 : 0;
 
-	// Use the big reticle bitmaps
-	const crossIdx = Gauges[ RETICLE_CROSS + crossReady ];
+	// Status bar mode uses the small reticle assets.
+	const useSmallReticle = ( _cockpitMode === CM_STATUS_BAR );
+	const crossBase = useSmallReticle === true ? SML_RETICLE_CROSS : RETICLE_CROSS;
+	const primaryBase = useSmallReticle === true ? SML_RETICLE_PRIMARY : RETICLE_PRIMARY;
+	const secondaryBase = useSmallReticle === true ? SML_RETICLE_SECONDARY : RETICLE_SECONDARY;
+
+	const crossIdx = Gauges[ crossBase + crossReady ];
 	if ( crossIdx >= 0 ) drawBitmapComposited( ctx, crossIdx, cx - 4, cy - 2 );
 
-	const priIdx = Gauges[ RETICLE_PRIMARY + primaryReady ];
+	const priIdx = Gauges[ primaryBase + primaryReady ];
 	if ( priIdx >= 0 ) drawBitmapComposited( ctx, priIdx, cx - 15, cy + 6 );
 
-	const secIdx = Gauges[ RETICLE_SECONDARY + secondaryReady ];
+	const secIdx = Gauges[ secondaryBase + secondaryReady ];
 	if ( secIdx >= 0 ) drawBitmapComposited( ctx, secIdx, cx - 12, cy + 1 );
 
 }
 
 function drawScoreLives( ctx ) {
+
+	// Status bar has its own compact bottom strip info.
+	if ( _cockpitMode === CM_STATUS_BAR ) return;
 
 	// Score (top right)
 	ctx.font = '7px monospace';
@@ -1026,11 +1107,13 @@ function drawHomingWarning( ctx ) {
 		// In C: GameTime is F1_0 per second (65536), bit 0x4000 toggles ~2 Hz
 		// In JS: _gameTime is seconds, so toggle every 0.25s
 		const blink = ( Math.floor( _gameTime * 4 ) & 1 ) === 0;
+		const warningY = ( _cockpitMode === CM_STATUS_BAR ) ? ( COCKPIT_H - 26 ) : HOMING_WARNING_Y;
+		const lockY = ( _cockpitMode === CM_STATUS_BAR ) ? ( COCKPIT_H - 32 ) : ( COCKPIT_H - 75 );
 
 		if ( blink === true ) {
 
 			// Draw "ON" warning bitmap at cockpit position
-			drawBitmap( ctx, Gauges[ GAUGE_HOMING_WARNING_ON ], HOMING_WARNING_X, HOMING_WARNING_Y );
+			drawBitmap( ctx, Gauges[ GAUGE_HOMING_WARNING_ON ], HOMING_WARNING_X, warningY );
 
 			// Draw "LOCK" text at bottom center of view
 			// Ported from: hud_show_homing_warning() in GAUGES.C line 871
@@ -1038,13 +1121,13 @@ function drawHomingWarning( ctx ) {
 			ctx.font = '7px monospace';
 			ctx.fillStyle = '#00ff00';
 			ctx.textAlign = 'center';
-			ctx.fillText( 'LOCK', COCKPIT_W / 2, COCKPIT_H - 75 );
+			ctx.fillText( 'LOCK', COCKPIT_W / 2, lockY );
 			ctx.restore();
 
 		} else {
 
 			// Draw "OFF" warning bitmap (blank indicator)
-			drawBitmap( ctx, Gauges[ GAUGE_HOMING_WARNING_OFF ], HOMING_WARNING_X, HOMING_WARNING_Y );
+			drawBitmap( ctx, Gauges[ GAUGE_HOMING_WARNING_OFF ], HOMING_WARNING_X, warningY );
 
 		}
 

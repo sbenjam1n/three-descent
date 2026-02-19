@@ -38,6 +38,8 @@ import { config_get_invert_mouse_y, config_set_invert_mouse_y,
 
 const GAME_ASPECT = 320 / 200;
 const COCKPIT_WINDOW_ASPECT = 320 / 140;
+const STATUSBAR_WINDOW_ASPECT = 320 / 160;
+const STATUSBAR_HEIGHT_FRAC = 40 / 200;
 
 let renderer = null;
 let scene = null;
@@ -500,6 +502,7 @@ function renderFrame() {
 	const isRear = ( Rear_view === true && camera !== null );
 	const isAutomap = ( getIsAutomap() === true );
 	const useCockpitViewport = ( ( Cockpit_mode === CM_FULL_COCKPIT || Cockpit_mode === CM_REAR_VIEW ) && isAutomap !== true );
+	const useStatusbarViewport = ( Cockpit_mode === CM_STATUS_BAR && isAutomap !== true );
 
 	// Rear view: rotate camera 180°
 	if ( isRear ) {
@@ -509,7 +512,7 @@ function renderFrame() {
 
 	}
 
-	if ( useCockpitViewport ) {
+	if ( useCockpitViewport || useStatusbarViewport ) {
 
 		// Two-pass: 3D in cockpit window, then full-screen HUD overlay
 		renderer.getSize( _rendererSize );
@@ -519,14 +522,16 @@ function renderFrame() {
 		renderer.autoClear = false;
 		renderer.clear();
 
-		// Scissor to top 70% of viewport (cockpit window area)
-		const scissorY = Math.floor( rh * 0.3 );
+		// Scissor to top gameplay viewport area.
+		const scissorY = useStatusbarViewport === true
+			? Math.floor( rh * STATUSBAR_HEIGHT_FRAC )
+			: Math.floor( rh * 0.3 );
 		const scissorH = rh - scissorY;
 
 		renderer.setScissorTest( true );
 		renderer.setScissor( 0, scissorY, rw, scissorH );
 		renderer.setViewport( 0, scissorY, rw, scissorH );
-		camera.aspect = COCKPIT_WINDOW_ASPECT;
+		camera.aspect = useStatusbarViewport === true ? STATUSBAR_WINDOW_ASPECT : COCKPIT_WINDOW_ASPECT;
 		camera.updateProjectionMatrix();
 
 		renderer.render( scene, camera );
@@ -1267,8 +1272,8 @@ function handleKeyAction( e ) {
 
 	}
 
-	// F3 to cycle cockpit modes (full cockpit → full screen → full cockpit)
-	// Ported from: toggle_cockpit() in GAME.C lines 772-801
+	// F3 cockpit cycle.
+	// Ported from: toggle_cockpit() in GAME.C; includes status bar mode.
 	if ( e.code === 'F3' ) {
 
 		e.preventDefault();
@@ -1276,6 +1281,10 @@ function handleKeyAction( e ) {
 		if ( Rear_view !== true && getIsAutomap() !== true ) {
 
 			if ( Cockpit_mode === CM_FULL_COCKPIT ) {
+
+				Cockpit_mode = CM_STATUS_BAR;
+
+			} else if ( Cockpit_mode === CM_STATUS_BAR ) {
 
 				Cockpit_mode = CM_FULL_SCREEN;
 
