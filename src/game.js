@@ -25,7 +25,9 @@ import { updateMineVisibility } from './render.js';
 import { lighting_add_muzzle_flash } from './lighting.js';
 import { controls_init, controls_set_resize_refs, controls_set_key_action_callback,
 	controls_get_keys, controls_consume_mouse, controls_consume_wheel, controls_is_pointer_locked,
-	controls_is_fire_down, controls_is_secondary_fire_down, controls_set_secondary_fire_down } from './controls.js';
+	controls_is_fire_down, controls_is_secondary_fire_down, controls_set_secondary_fire_down,
+	controls_is_action_down, controls_event_matches_action,
+	controls_get_bindable_actions, controls_get_action_primary_code, controls_set_action_primary_code } from './controls.js';
 import { PLAYER_MASS, PLAYER_DRAG, PLAYER_MAX_THRUST, PLAYER_MAX_ROTTHRUST, PLAYER_WIGGLE, PLAYER_RADIUS,
 	do_physics_sim_rot, do_physics_sim, do_physics_move, physics_reset,
 	set_object_turnroll, getTurnroll, phys_apply_force_to_player, phys_apply_rot,
@@ -63,9 +65,12 @@ let _pauseWrapper = null;
 let _pauseSelectedIndex = 0;
 let _pauseStatusText = null;	// temporary status message ("GAME SAVED!", etc.)
 let _pauseStatusTimer = 0;
-let _pauseState = 'menu';	// 'menu' or 'settings'
+let _pauseState = 'menu';	// 'menu', 'settings', or 'bindings'
 let _settingsSelectedIndex = 0;
 let _settingsItemYPositions = [];
+let _bindingsSelectedIndex = 0;
+let _bindingsItemYPositions = [];
+let _bindingCaptureAction = null;
 
 const PAUSE_W = 320;
 const PAUSE_H = 200;
@@ -641,12 +646,11 @@ function updateCamera( dt ) {
 
 	}
 
-	const keys = controls_get_keys();
-	const manualRollActive = ( keys[ 'KeyQ' ] === true || keys[ 'KeyE' ] === true );
+	const manualRollActive = ( controls_is_action_down( 'roll_left' ) === true || controls_is_action_down( 'roll_right' ) === true );
 
 	// Keyboard roll (Q/E)
-	if ( keys[ 'KeyQ' ] ) rotThrust_z += PLAYER_MAX_ROTTHRUST;
-	if ( keys[ 'KeyE' ] ) rotThrust_z -= PLAYER_MAX_ROTTHRUST;
+	if ( controls_is_action_down( 'roll_left' ) === true ) rotThrust_z += PLAYER_MAX_ROTTHRUST;
+	if ( controls_is_action_down( 'roll_right' ) === true ) rotThrust_z -= PLAYER_MAX_ROTTHRUST;
 
 	// Apply rotational drag + thrust (ported from do_physics_sim_rot in PHYSICS.C)
 	const playerRotVel = do_physics_sim_rot( rotThrust_x, rotThrust_y, rotThrust_z, dt );
@@ -697,14 +701,14 @@ function updateCamera( dt ) {
 
 	// Cruise control: R to increase, T to decrease cruise speed
 	// Ported from: KCONFIG.C lines 2064-2080 — "stupid-cruise-control-type of throttle"
-	if ( keys[ 'KeyR' ] ) {
+	if ( controls_is_action_down( 'cruise_faster' ) === true ) {
 
 		Cruise_speed += 200 * dt;	// ramp up at ~200%/sec
 		if ( Cruise_speed > 100 ) Cruise_speed = 100;
 
 	}
 
-	if ( keys[ 'KeyT' ] ) {
+	if ( controls_is_action_down( 'cruise_slower' ) === true ) {
 
 		Cruise_speed -= 200 * dt;	// ramp down at ~200%/sec
 		if ( Cruise_speed < 0 ) Cruise_speed = 0;
@@ -712,8 +716,8 @@ function updateCamera( dt ) {
 	}
 
 	// WASD = thrust along ship axes
-	const forwardPressed = ( keys[ 'KeyW' ] || keys[ 'ArrowUp' ] );
-	const backwardPressed = ( keys[ 'KeyS' ] || keys[ 'ArrowDown' ] );
+	const forwardPressed = controls_is_action_down( 'thrust_forward' ) === true;
+	const backwardPressed = controls_is_action_down( 'thrust_backward' ) === true;
 
 	if ( forwardPressed ) {
 
@@ -742,7 +746,7 @@ function updateCamera( dt ) {
 
 	}
 
-	if ( keys[ 'KeyA' ] || keys[ 'ArrowLeft' ] ) {
+	if ( controls_is_action_down( 'thrust_left' ) === true ) {
 
 		thrust_x -= rgt_dx * PLAYER_MAX_THRUST;
 		thrust_y -= rgt_dy * PLAYER_MAX_THRUST;
@@ -750,7 +754,7 @@ function updateCamera( dt ) {
 
 	}
 
-	if ( keys[ 'KeyD' ] || keys[ 'ArrowRight' ] ) {
+	if ( controls_is_action_down( 'thrust_right' ) === true ) {
 
 		thrust_x += rgt_dx * PLAYER_MAX_THRUST;
 		thrust_y += rgt_dy * PLAYER_MAX_THRUST;
@@ -758,7 +762,7 @@ function updateCamera( dt ) {
 
 	}
 
-	if ( keys[ 'Space' ] ) {
+	if ( controls_is_action_down( 'thrust_up' ) === true ) {
 
 		thrust_x += up_dx * PLAYER_MAX_THRUST;
 		thrust_y += up_dy * PLAYER_MAX_THRUST;
@@ -766,7 +770,7 @@ function updateCamera( dt ) {
 
 	}
 
-	if ( keys[ 'ShiftLeft' ] || keys[ 'ShiftRight' ] ) {
+	if ( controls_is_action_down( 'thrust_down' ) === true ) {
 
 		thrust_x -= up_dx * PLAYER_MAX_THRUST;
 		thrust_y -= up_dy * PLAYER_MAX_THRUST;
@@ -1144,6 +1148,55 @@ function handleKeyAction( e ) {
 	// When paused, only handle pause-related keys
 	if ( isPaused === true ) {
 
+		if ( _pauseState === 'bindings' ) {
+
+			e.preventDefault();
+
+			if ( _bindingCaptureAction !== null ) {
+
+				if ( e.code === 'Escape' ) {
+
+					_bindingCaptureAction = null;
+					renderPauseMenu();
+					return;
+
+				}
+
+				controls_set_action_primary_code( _bindingCaptureAction, e.code );
+				_bindingCaptureAction = null;
+				renderPauseMenu();
+				return;
+
+			}
+
+			if ( e.key === 'Escape' ) {
+
+				_pauseState = 'settings';
+				renderPauseMenu();
+
+			} else if ( e.key === 'ArrowUp' ) {
+
+				_bindingsSelectedIndex --;
+				if ( _bindingsSelectedIndex < 0 ) _bindingsSelectedIndex = PAUSE_BINDING_ITEMS.length - 1;
+				renderPauseMenu();
+
+			} else if ( e.key === 'ArrowDown' ) {
+
+				_bindingsSelectedIndex ++;
+				if ( _bindingsSelectedIndex >= PAUSE_BINDING_ITEMS.length ) _bindingsSelectedIndex = 0;
+				renderPauseMenu();
+
+			} else if ( e.key === 'Enter' ) {
+
+				_bindingCaptureAction = PAUSE_BINDING_ITEMS[ _bindingsSelectedIndex ].id;
+				renderPauseMenu();
+
+			}
+
+			return;
+
+		}
+
 		// Settings sub-screen has its own key handling
 		if ( _pauseState === 'settings' ) {
 
@@ -1177,7 +1230,7 @@ function handleKeyAction( e ) {
 
 		}
 
-		if ( e.code === 'KeyP' || e.code === 'Escape' ) {
+		if ( controls_event_matches_action( e, 'pause_game' ) === true ) {
 
 			e.preventDefault();
 			// Escape/P while paused: do nothing — user must click RESUME
@@ -1245,7 +1298,7 @@ function handleKeyAction( e ) {
 
 	// F key to fire flare
 	// Ported from: Flare_create() in LASER.C lines 857-887
-	if ( e.code === 'KeyF' && playerDead !== true && camera !== null ) {
+	if ( controls_event_matches_action( e, 'fire_flare' ) === true && playerDead !== true && camera !== null ) {
 
 		// Fire from gun 6 (center gun)
 		const gp = getGunWorldPos( 6 );
@@ -1265,7 +1318,7 @@ function handleKeyAction( e ) {
 	}
 
 	// Tab to toggle automap
-	if ( e.code === 'Tab' ) {
+	if ( controls_event_matches_action( e, 'toggle_automap' ) === true ) {
 
 		e.preventDefault();
 		toggleAutomap();
@@ -1274,7 +1327,7 @@ function handleKeyAction( e ) {
 
 	// F3 cockpit cycle.
 	// Ported from: toggle_cockpit() in GAME.C; includes status bar mode.
-	if ( e.code === 'F3' ) {
+	if ( controls_event_matches_action( e, 'toggle_cockpit' ) === true ) {
 
 		e.preventDefault();
 
@@ -1306,7 +1359,7 @@ function handleKeyAction( e ) {
 
 	// Backspace to reset cruise speed
 	// Ported from: KCONFIG.C lines 2075-2078 — cruise off key
-	if ( e.code === 'Backspace' ) {
+	if ( controls_event_matches_action( e, 'reset_cruise' ) === true ) {
 
 		Cruise_speed = 0;
 
@@ -1314,7 +1367,7 @@ function handleKeyAction( e ) {
 
 	// H to toggle rear view
 	// Ported from: GAME.C lines 2517-2558 rear view handling
-	if ( e.code === 'KeyH' ) {
+	if ( controls_event_matches_action( e, 'toggle_rear_view' ) === true ) {
 
 		if ( playerDead !== true && getIsAutomap() !== true ) {
 
@@ -1345,7 +1398,7 @@ function handleKeyAction( e ) {
 
 	// P or Escape to open pause menu
 	// Ported from: GAME.C — game pause functionality
-	if ( e.code === 'KeyP' || e.code === 'Escape' ) {
+	if ( controls_event_matches_action( e, 'pause_game' ) === true ) {
 
 		e.preventDefault();
 		togglePause();
@@ -1465,6 +1518,13 @@ function renderPauseMenu() {
 
 	}
 
+	if ( _pauseState === 'bindings' ) {
+
+		renderPauseBindings();
+		return;
+
+	}
+
 	const normalFont = NORMAL_FONT();
 	const currentFont = CURRENT_FONT();
 	const subtitleFont = SUBTITLE_FONT();
@@ -1528,7 +1588,10 @@ function renderPauseMenu() {
 const PAUSE_SETTINGS_ITEMS = [
 	{ label: 'INVERT MOUSE', id: 'invert_mouse' },
 	{ label: 'TEXTURE FILTERING', id: 'texture_filtering' },
+	{ label: 'CONFIGURE KEYS', id: 'configure_keys' },
 ];
+
+const PAUSE_BINDING_ITEMS = controls_get_bindable_actions();
 
 function getPauseSettingValue( id ) {
 
@@ -1541,6 +1604,12 @@ function getPauseSettingValue( id ) {
 	if ( id === 'texture_filtering' ) {
 
 		return config_get_texture_filtering() === 'linear' ? 'ON' : 'OFF';
+
+	}
+
+	if ( id === 'configure_keys' ) {
+
+		return 'OPEN';
 
 	}
 
@@ -1561,6 +1630,14 @@ function togglePauseSetting( id ) {
 		config_set_texture_filtering(
 			config_get_texture_filtering() === 'linear' ? 'nearest' : 'linear'
 		);
+
+	}
+
+	if ( id === 'configure_keys' ) {
+
+		_pauseState = 'bindings';
+		_bindingsSelectedIndex = 0;
+		_bindingCaptureAction = null;
 
 	}
 
@@ -1614,6 +1691,77 @@ function renderPauseSettings() {
 
 }
 
+function formatBindingCode( code ) {
+
+	if ( code === '' ) return 'UNBOUND';
+	if ( code === 'Space' ) return 'SPACE';
+	if ( code === 'Escape' ) return 'ESC';
+	if ( code === 'Backspace' ) return 'BKSP';
+	if ( code === 'ShiftLeft' || code === 'ShiftRight' ) return 'SHIFT';
+	if ( code.substring( 0, 3 ) === 'Key' ) return code.substring( 3 );
+	if ( code.substring( 0, 5 ) === 'Digit' ) return code.substring( 5 );
+	if ( code.substring( 0, 5 ) === 'Arrow' ) return code.substring( 5 ).toUpperCase();
+	return code.toUpperCase();
+
+}
+
+function renderPauseBindings() {
+
+	if ( _pauseCtx === null ) return;
+
+	const normalFont = NORMAL_FONT();
+	const currentFont = CURRENT_FONT();
+	const subtitleFont = SUBTITLE_FONT();
+	const smallFont = GAME_FONT();
+
+	_pauseCtx.clearRect( 0, 0, PAUSE_W, PAUSE_H );
+	const imageData = _pauseCtx.createImageData( PAUSE_W, PAUSE_H );
+
+	_bindingsItemYPositions = [];
+
+	if ( normalFont === null || currentFont === null ) return;
+
+	const titleFont = subtitleFont !== null ? subtitleFont : normalFont;
+	const titleY = 42;
+	gr_string( imageData, titleFont, 0x8000, titleY, 'KEY BINDINGS', _gamePalette );
+
+	const itemHeight = normalFont.ft_h + 2;
+	const itemsStartY = titleY + titleFont.ft_h + 10;
+
+	for ( let i = 0; i < PAUSE_BINDING_ITEMS.length; i ++ ) {
+
+		const item = PAUSE_BINDING_ITEMS[ i ];
+		const isSelected = ( i === _bindingsSelectedIndex );
+		const font = isSelected ? currentFont : normalFont;
+		const y = itemsStartY + i * itemHeight;
+		_bindingsItemYPositions.push( { y: y, h: itemHeight } );
+
+		const code = controls_get_action_primary_code( item.id );
+		const text = item.label + ': ' + formatBindingCode( code );
+		gr_string( imageData, font, 0x8000, y, text, _gamePalette );
+
+	}
+
+	if ( smallFont !== null ) {
+
+		const hintY = itemsStartY + PAUSE_BINDING_ITEMS.length * itemHeight + 8;
+
+		if ( _bindingCaptureAction !== null ) {
+
+			gr_string( imageData, smallFont, 0x8000, hintY, 'PRESS A KEY  ESC TO CANCEL', _gamePalette );
+
+		} else {
+
+			gr_string( imageData, smallFont, 0x8000, hintY, 'ENTER TO REBIND  ESC TO BACK', _gamePalette );
+
+		}
+
+	}
+
+	_pauseCtx.putImageData( imageData, 0, 0 );
+
+}
+
 // Convert viewport mouse coordinates to 320x200 canvas space
 function pauseViewportTo320x200( clientX, clientY ) {
 
@@ -1660,11 +1808,44 @@ function findSettingsItemAtY( y200 ) {
 
 }
 
+function findBindingsItemAtY( y200 ) {
+
+	for ( let i = 0; i < _bindingsItemYPositions.length; i ++ ) {
+
+		const item = _bindingsItemYPositions[ i ];
+
+		if ( y200 >= item.y && y200 < item.y + item.h ) {
+
+			return i;
+
+		}
+
+	}
+
+	return - 1;
+
+}
+
 function onPauseMouseMove( e ) {
 
 	if ( _pauseCanvas === null ) return;
 
 	const pos = pauseViewportTo320x200( e.clientX, e.clientY );
+
+	if ( _pauseState === 'bindings' ) {
+
+		const idx = findBindingsItemAtY( pos.y );
+
+		if ( idx !== - 1 && idx !== _bindingsSelectedIndex ) {
+
+			_bindingsSelectedIndex = idx;
+			renderPauseMenu();
+
+		}
+
+		return;
+
+	}
 
 	if ( _pauseState === 'settings' ) {
 
@@ -1697,6 +1878,22 @@ function onPauseMouseClick( e ) {
 	if ( _pauseCanvas === null ) return;
 
 	const pos = pauseViewportTo320x200( e.clientX, e.clientY );
+
+	if ( _pauseState === 'bindings' ) {
+
+		const idx = findBindingsItemAtY( pos.y );
+
+		if ( idx !== - 1 ) {
+
+			_bindingsSelectedIndex = idx;
+			_bindingCaptureAction = PAUSE_BINDING_ITEMS[ idx ].id;
+			renderPauseMenu();
+
+		}
+
+		return;
+
+	}
 
 	if ( _pauseState === 'settings' ) {
 
@@ -1797,6 +1994,8 @@ function showPauseMenu() {
 	ensurePauseCanvas();
 	_pauseSelectedIndex = 0;
 	_pauseState = 'menu';
+	_bindingsSelectedIndex = 0;
+	_bindingCaptureAction = null;
 	_pauseStatusText = null;
 	clearTimeout( _pauseStatusTimer );
 	renderPauseMenu();
