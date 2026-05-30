@@ -980,13 +980,18 @@ export function opl_init( hogFile ) {
 
 			const drumMap = new Map();
 
-			for ( let i = 0; i < drumBank.entries.length; i ++ ) {
+			// In the AdLib drum bank a name record's POSITION is the MIDI note it
+			// services — i.e. the General MIDI percussion key map (Kick@36, Snare@38,
+			// closed hat@42, open hat@46, crash@49, ride@51, cowbell@56, ...), exactly
+			// as the melodic bank's position is its program number. The flag byte
+			// ( entry.tag ) is unrelated metadata (it is 60 on most records, including
+			// every blank slot), so map by position, skipping the silent 'Blank.in'
+			// slots so unused notes fall through to the nearest-note fallback.
+			for ( let note = 0; note < drumBank.entries.length && note < 128; note ++ ) {
 
-				const entry = drumBank.entries[ i ];
-				const note = entry.tag & 0x7F;
-				if ( note < 0 || note > 127 ) continue;
+				const entry = drumBank.entries[ note ];
+				if ( entry.name === 'Blank.in' ) continue;
 				if ( entry.instrumentIndex >= drumBank.instruments.length ) continue;
-				if ( drumMap.has( note ) ) continue;
 
 				const patch = bankInstrumentToPatch( drumBank.instruments[ entry.instrumentIndex ] );
 				if ( patch === null ) continue;

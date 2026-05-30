@@ -18,6 +18,12 @@ export const SONG_ENDGAME = 3;
 export const SONG_CREDITS = 4;
 export const SONG_LEVEL_MUSIC = 5;
 
+// SONGS.H defines NUM_GAME_SONGS = 22 for registered Descent. The shareware
+// data set ships only 5 in-game songs (game0..game4), so the level-song wrap
+// uses 5 here. (descent.sng, which would carry the real count, is not present
+// in the shareware HOG, so the table above is hardcoded — see songs_init notes.)
+export const NUM_GAME_SONGS = 5;
+
 // Shareware song file mapping
 const SHAREWARE_SONGS = [
 	'descent.hmp',
@@ -276,8 +282,13 @@ export function songs_play_song( songnum, loop ) {
 
 export function songs_play_level_song( levelnum ) {
 
-	const songIndex = SONG_LEVEL_MUSIC + ( ( levelnum - 1 ) % 5 );
-	songs_play_song( songIndex, true );
+	// Ported from SONGS.C: negative level numbers are secret levels and index
+	// directly by -levelnum; normal levels index by (levelnum-1).
+	const songnum = ( levelnum < 0 )
+		? ( ( - levelnum ) % NUM_GAME_SONGS )
+		: ( ( levelnum - 1 ) % NUM_GAME_SONGS );
+
+	songs_play_song( SONG_LEVEL_MUSIC + songnum, true );
 
 }
 

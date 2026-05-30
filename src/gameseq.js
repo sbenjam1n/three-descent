@@ -1081,7 +1081,9 @@ async function advanceLevel( secretFlag ) {
 	}
 
 	console.log( 'Loading level: ' + levelName );
-	songs_play_level_song( Math.abs( currentLevelNum ) );
+	// Pass the signed level number through; songs_play_level_song handles the
+	// secret-level (negative) case itself, matching SONGS.C.
+	songs_play_level_song( currentLevelNum );
 	loadLevel( levelName );
 
 }
