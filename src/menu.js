@@ -453,7 +453,8 @@ export async function do_main_menu( hogFile, defaultDifficulty, gamePalette ) {
 
 			if ( id === 'new_game' ) {
 
-				selectedIndex = defaultDifficulty || 1;
+				// Difficulty 0 (Trainee) is valid data — don't treat it as missing.
+				selectedIndex = ( defaultDifficulty != null ) ? defaultDifficulty : 1;
 				renderDifficultyMenu();
 				return;
 
