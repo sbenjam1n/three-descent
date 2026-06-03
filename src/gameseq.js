@@ -439,6 +439,25 @@ function addPlayerScore( points ) {
 
 }
 
+// Ported from: add_bonus_points_to_score() in GAUGES.C:1221 — add end-of-level bonus points
+// and grant an extra ship for each EXTRA_SHIP_SCORE (50,000) boundary crossed. Unlike
+// add_points_to_score() there is no on-screen score popup for bonus points.
+function addBonusPointsToScore( points ) {
+
+	if ( points === 0 ) return;
+
+	const prevScore = playerScore;
+	playerScore += points;
+
+	if ( Math.floor( playerScore / EXTRA_SHIP_SCORE ) !== Math.floor( prevScore / EXTRA_SHIP_SCORE ) ) {
+
+		playerLives += Math.floor( playerScore / EXTRA_SHIP_SCORE ) - Math.floor( prevScore / EXTRA_SHIP_SCORE );
+		showMessage( 'EXTRA LIFE!' );
+
+	}
+
+}
+
 // --- Auto-select wrappers ---
 function autoSelectPrimary() {
 
@@ -688,7 +707,10 @@ function showBonusScreen( isFinalLevel, onContinue ) {
 	}
 
 	const totalBonus = shieldBonus + energyBonus + hostageBonus + allHostageBonus + skillBonus + endgameBonus;
-	playerScore += totalBonus;
+
+	// Route the bonus through the extra-ship logic instead of a raw add. Ported from:
+	// DoEndLevelScoreGlitz() -> add_bonus_points_to_score() (GAMESEQ.C:1094, GAUGES.C:1221)
+	addBonusPointsToScore( totalBonus );
 
 	console.log( 'BONUS: Shield=' + shieldBonus + ' Energy=' + energyBonus + ' Hostage=' + hostageBonus +
 		' AllHostage=' + allHostageBonus + ' Skill=' + skillBonus + ' Endgame=' + endgameBonus + ' Total=' + totalBonus );
