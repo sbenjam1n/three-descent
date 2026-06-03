@@ -164,23 +164,44 @@ export function autoSelectPrimary( playerPrimaryFlags, playerVulcanAmmo, playerE
 
 }
 
-// Auto-select best available secondary weapon
-// Priority: Smart(3) -> Homing(1) -> Concussion(0), skip Proximity(2)
-export function autoSelectSecondary( playerSecondaryAmmo, setSecondaryWeapon, showMessage, updateHUD ) {
+// Secondary weapon indices. Ported from: WEAPON.H:227-231
+const CONCUSSION_INDEX = 0;
+const HOMING_INDEX = 1;
+const PROXIMITY_INDEX = 2;
+const SMART_INDEX = 3;
 
-	const priority = [ 3, 1, 0 ];
+// Auto-select the best available secondary when the current one runs dry.
+// Ported from: auto_select_weapon() in WEAPON.C:438-453 (weapon_type == 1).
+export function autoSelectSecondary( currentSecondary, playerSecondaryAmmo, setSecondaryWeapon, showMessage, updateHUD ) {
 
-	for ( let p = 0; p < priority.length; p ++ ) {
+	// Never auto-switch away from proximity bombs.
+	if ( currentSecondary === PROXIMITY_INDEX ) return;
 
-		const slot = priority[ p ];
-		if ( playerSecondaryAmmo[ slot ] > 0 ) {
+	// Only switch when the current secondary is out of ammo.
+	if ( playerSecondaryAmmo[ currentSecondary ] > 0 ) return;
 
-			setSecondaryWeapon( slot );
-			showMessage( SECONDARY_NAMES[ slot ] );
-			updateHUD();
-			return;
+	// If the current weapon is above Smart (i.e. Mega) and Smart is available, prefer Smart.
+	if ( currentSecondary > SMART_INDEX && playerSecondaryAmmo[ SMART_INDEX ] > 0 ) {
 
-		}
+		setSecondaryWeapon( SMART_INDEX );
+		showMessage( SECONDARY_NAMES[ SMART_INDEX ] );
+		updateHUD();
+		return;
+
+	}
+
+	// Otherwise prefer Homing, then Concussion.
+	if ( playerSecondaryAmmo[ HOMING_INDEX ] > 0 ) {
+
+		setSecondaryWeapon( HOMING_INDEX );
+		showMessage( SECONDARY_NAMES[ HOMING_INDEX ] );
+		updateHUD();
+
+	} else if ( playerSecondaryAmmo[ CONCUSSION_INDEX ] > 0 ) {
+
+		setSecondaryWeapon( CONCUSSION_INDEX );
+		showMessage( SECONDARY_NAMES[ CONCUSSION_INDEX ] );
+		updateHUD();
 
 	}
 

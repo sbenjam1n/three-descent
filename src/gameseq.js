@@ -468,7 +468,7 @@ function autoSelectPrimary() {
 
 function autoSelectSecondary() {
 
-	weapon_autoSelectSecondary( playerSecondaryAmmo, set_secondary_weapon, showMessage, updateHUD );
+	weapon_autoSelectSecondary( Secondary_weapon, playerSecondaryAmmo, set_secondary_weapon, showMessage, updateHUD );
 
 }
 
