@@ -741,34 +741,12 @@ function find_homing_object( w ) {
 	// In C: if (parent_num != player) { if (!cloaked) best_objnum = ConsoleObject - Objects; }
 	if ( w.parent_type !== PARENT_PLAYER ) {
 
-		// Don't track cloaked player
+		// Robot-fired homing weapons acquire the player unconditionally (as long as the
+		// player is not cloaked) — C applies NO tracking-cone or distance gate here.
+		// Ported from: find_homing_object() in LASER.C:559-563:
+		//   if (parent_num != player) { if (!cloaked) best_objnum = ConsoleObject - Objects; }
 		if ( _isPlayerCloaked !== null && _isPlayerCloaked() === true ) return - 1;
-
-		// Verify player is within tracking cone and distance
-		if ( _getPlayerPos === null ) return - 1;
-		const pp = _getPlayerPos();
-
-		const speed = Math.sqrt( w.vel_x * w.vel_x + w.vel_y * w.vel_y + w.vel_z * w.vel_z );
-		if ( speed < 0.001 ) return - 1;
-
-		const fwd_x = w.vel_x / speed;
-		const fwd_y = w.vel_y / speed;
-		const fwd_z = w.vel_z / speed;
-
-		const dx = pp.x - w.pos_x;
-		const dy = pp.y - w.pos_y;
-		const dz = pp.z - w.pos_z;
-		const dist = Math.sqrt( dx * dx + dy * dy + dz * dz );
-
-		if ( dist > MAX_TRACKABLE_DIST || dist < 0.001 ) return - 1;
-
-		const nx = dx / dist;
-		const ny = dy / dist;
-		const nz = dz / dist;
-		const dot = fwd_x * nx + fwd_y * ny + fwd_z * nz;
-
-		if ( dot > MIN_TRACKABLE_DOT ) return TRACK_PLAYER;
-		return - 1;
+		return TRACK_PLAYER;
 
 	}
 
