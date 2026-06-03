@@ -1934,6 +1934,12 @@ function do_ai_for_robot( robot, playerPos, robotIndex ) {
 
 		}
 
+	} else {
+
+		// No player awareness: settle the goal state back to rest.
+		// Ported from: AI.C:2933 — else aip->GOAL_STATE = AIS_REST;
+		ailp.goal_state = AIS_REST;
+
 	}
 
 	// Compute target position: real player pos, or believed pos if cloaked
