@@ -436,6 +436,19 @@ export function collide_robot_and_weapon( robotIndex, damage, weapon_type, vel_x
 
 			}
 
+			// Create per-robot hit spark (stage 0, exp1_vclip_num) at the impact point.
+			// Ported from: collide_robot_and_weapon() in COLLIDE.C lines 1322-1323
+			//   object_create_explosion( weapon->segnum, collision_point, (robot->size/2*3)/4, exp1_vclip_num )
+			if ( Robot_info[ rtype_hit ].exp1_vclip_num > - 1 ) {
+
+				object_create_explosion(
+					robot.obj.pos_x, robot.obj.pos_y, robot.obj.pos_z,
+					robot.obj.size * 3 / 8,
+					Robot_info[ rtype_hit ].exp1_vclip_num
+				);
+
+			}
+
 		}
 
 	}

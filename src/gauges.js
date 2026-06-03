@@ -141,6 +141,7 @@ let _paletteBlueAdd = 0;
 
 // White-out flash for mine destruction (0.0 to 1.0)
 let _whiteFlashAlpha = 0;
+let _countdownSecondsLeft = - 1;	// Reactor self-destruct countdown ("T-%d s"), -1 = inactive
 
 // --- Homing missile warning ---
 // Ported from: GAUGES.C lines 809-870
@@ -323,6 +324,34 @@ export function gauges_set_white_flash( alpha ) {
 
 }
 
+// Reactor self-destruct countdown seconds ("T-%d s" gauge); -1 = inactive.
+// Ported from: render_countdown_gauge() in GAME.C lines 1395-1407
+export function gauges_set_countdown_seconds( secs ) {
+
+	if ( secs !== _countdownSecondsLeft ) {
+
+		_countdownSecondsLeft = secs;
+		_dirty = true;
+
+	}
+
+}
+
+// Draw the reactor self-destruct countdown ("T-%d s") near the top of the screen.
+// Ported from: render_countdown_gauge() in GAME.C lines 1395-1407
+//   gr_set_fontcolor( gr_getcolor( 0, 63, 0 ), -1 ); gr_printf( 0x8000, y, "T-%d s", Fuelcen_seconds_left );
+function drawCountdownGauge( ctx ) {
+
+	if ( _countdownSecondsLeft < 0 || _countdownSecondsLeft >= 127 ) return;
+
+	ctx.fillStyle = '#00fc00';	// gr_getcolor( 0, 63, 0 )
+	ctx.font = 'bold 8px monospace';
+	ctx.textAlign = 'center';
+	ctx.fillText( 'T-' + _countdownSecondsLeft + ' s', COCKPIT_W / 2, 20 );
+	ctx.textAlign = 'left';
+
+}
+
 export function gauges_draw( dt ) {
 
 	if ( _ctx === null ) return;
@@ -435,6 +464,10 @@ export function gauges_draw( dt ) {
 		drawScorePopup( ctx );
 
 	}
+
+	// Draw reactor self-destruct countdown timer ("T-%d s")
+	// Ported from: render_countdown_gauge() in GAME.C lines 1395-1407
+	drawCountdownGauge( ctx );
 
 	// Draw "press any key" message during death
 	// Ported from: player_dead_message() in HUD.C lines 320-332

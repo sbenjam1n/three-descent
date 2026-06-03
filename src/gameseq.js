@@ -33,11 +33,11 @@ import { get_seg_masks } from './gameseg.js';
 // automap is now self-contained — see automap.js
 import { fuelcen_init, fuelcen_reset, fuelcen_set_externals, fuelcen_frame_process, SEGMENT_IS_FUELCEN } from './fuelcen.js';
 import { cntrlcen_set_externals, cntrlcen_set_reactor, init_controlcen_for_level, startSelfDestruct,
-	cntrlcen_is_self_destruct_active, cntrlcen_reset,
+	cntrlcen_is_self_destruct_active, cntrlcen_get_self_destruct_timer, cntrlcen_reset,
 	do_controlcen_frame, do_controlcen_destroyed_frame } from './cntrlcen.js';
 import { Robot_info, N_robot_types } from './robot.js';
 import { do_morph_frame, start_robot_morph } from './morph.js';
-import { gauges_init, gauges_update, gauges_flash_damage, gauges_set_white_flash, gauges_draw, gauges_set_externals, gauges_add_score_points, gauges_set_cockpit_mode } from './gauges.js';
+import { gauges_init, gauges_update, gauges_flash_damage, gauges_set_white_flash, gauges_draw, gauges_set_externals, gauges_add_score_points, gauges_set_cockpit_mode, gauges_set_countdown_seconds } from './gauges.js';
 import { hud_show_message } from './hud.js';
 import { powerup_set_externals, powerup_place, powerup_place_hostage, powerup_do_frame, powerup_cleanup, powerup_get_live, spawnDroppedPowerup, buildSpriteTexture } from './powerup.js';
 import { hostage_get_in_level, hostage_get_level_saved, hostage_get_total_saved,
@@ -2075,6 +2075,13 @@ function loadLevelData( levelFile ) {
 
 // --- Frame callback: check powerup collection + reactor status ---
 function onFrameCallback( dt ) {
+
+	// Update reactor self-destruct countdown gauge ("T-%d s") before drawing HUD.
+	// Ported from: render_countdown_gauge() in GAME.C lines 1395-1407
+	gauges_set_countdown_seconds(
+		( cntrlcen_is_self_destruct_active() === true && endlevel_is_active() !== true && cntrlcen_get_self_destruct_timer() > 0 )
+			? Math.ceil( cntrlcen_get_self_destruct_timer() ) : - 1
+	);
 
 	// Draw Canvas 2D HUD overlay (handles damage flash + message timers internally)
 	gauges_draw( dt );
