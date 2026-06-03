@@ -996,7 +996,8 @@ function processFusionCharge() {
 	Fusion_charge += dt;
 
 	// Continuous energy drain while charging
-	const newEnergy = _getPlayerEnergy() - dt * 4.0;
+	// Ported from: GAME.C line 4058 — Players[Player_num].energy -= FrameTime;
+	const newEnergy = _getPlayerEnergy() - dt;
 	_setPlayerEnergy( Math.max( newEnergy, 0 ) );
 	if ( _updateHUD !== null ) _updateHUD();
 
