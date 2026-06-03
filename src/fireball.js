@@ -220,7 +220,7 @@ export function object_create_explosion( pos_x, pos_y, pos_z, size, vclip_num ) 
 
 // Create a single debris piece from a submodel of a destroyed object
 // Ported from: object_create_debris() in FIREBALL.C
-function object_create_debris( model_num, subobj_num, pos_x, pos_y, pos_z ) {
+function object_create_debris( model_num, subobj_num, pos_x, pos_y, pos_z, pvx = 0, pvy = 0, pvz = 0 ) {
 
 	if ( _scene === null || _pigFile === null || _palette === null ) return;
 
@@ -279,10 +279,12 @@ function object_create_debris( model_num, subobj_num, pos_x, pos_y, pos_z ) {
 
 	}
 
+	// Random direction * speed 10-40, plus the destroyed object's velocity.
+	// Ported from FIREBALL.C:362 — vm_vec_add2(&velocity, &parent->velocity).
 	const speed = 10.0 + Math.random() * 30.0;
-	d.vel_x = vx * speed;
-	d.vel_y = vy * speed;
-	d.vel_z = vz * speed;
+	d.vel_x = vx * speed + pvx;
+	d.vel_y = vy * speed + pvy;
+	d.vel_z = vz * speed + pvz;
 
 	// Fixed rotation velocities (from FIREBALL.C)
 	// 10*0x2000/3 = ~0.4167 rev/s, 10*0x4000/3 = ~0.8333, 10*0x7000/3 = ~1.4583
@@ -298,7 +300,7 @@ function object_create_debris( model_num, subobj_num, pos_x, pos_y, pos_z ) {
 
 // Blow up a polygon model — create debris for each submodel
 // Ported from: explode_model() in FIREBALL.C
-export function explode_model( model_num, pos_x, pos_y, pos_z ) {
+export function explode_model( model_num, pos_x, pos_y, pos_z, pvx = 0, pvy = 0, pvz = 0 ) {
 
 	if ( model_num < 0 || model_num >= Polygon_models.length ) return;
 
@@ -310,14 +312,14 @@ export function explode_model( model_num, pos_x, pos_y, pos_z ) {
 		// Create debris for each submodel (skip 0 = center body)
 		for ( let i = 1; i < model.n_models; i ++ ) {
 
-			object_create_debris( model_num, i, pos_x, pos_y, pos_z );
+			object_create_debris( model_num, i, pos_x, pos_y, pos_z, pvx, pvy, pvz );
 
 		}
 
 	}
 
 	// Also create debris for submodel 0 (the center) since we remove the whole mesh
-	object_create_debris( model_num, 0, pos_x, pos_y, pos_z );
+	object_create_debris( model_num, 0, pos_x, pos_y, pos_z, pvx, pvy, pvz );
 
 }
 

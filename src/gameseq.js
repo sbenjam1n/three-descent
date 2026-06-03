@@ -1648,9 +1648,11 @@ function loadLevelData( levelFile ) {
 			// Create debris from model
 			if ( robot.obj.rtype !== null ) {
 
+				const dv = robot.aiLocal;
 				explode_model(
 					robot.obj.rtype.model_num,
-					robot.obj.pos_x, robot.obj.pos_y, robot.obj.pos_z
+					robot.obj.pos_x, robot.obj.pos_y, robot.obj.pos_z,
+					dv != null ? dv.vel_x : 0, dv != null ? dv.vel_y : 0, dv != null ? dv.vel_z : 0
 				);
 
 			}
