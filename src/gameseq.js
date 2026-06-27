@@ -1537,6 +1537,13 @@ function loadLevelData( levelFile ) {
 		getHostagesInLevel: hostage_get_in_level,
 		getHostagesSavedInLevel: hostage_get_level_saved,
 		getPlayerPos: getPlayerPos,
+		setPlayerPos: ( x, y, z ) => {
+
+			// Descent coords -> Three.js camera (negate Z)
+			const cam = getCamera();
+			if ( cam !== null ) cam.position.set( x, y, - z );
+
+		},
 		getPlayerSegnum: getPlayerSegnum,
 		getScene: getScene,
 		updateHUD: updateHUD,
@@ -1623,8 +1630,8 @@ function loadLevelData( levelFile ) {
 		getPlayerDead: () => playerDead,
 		onMeleeAttack: ( damage, claw_sound, pos_x, pos_y, pos_z ) =>
 			collide_player_and_nasty_robot( damage, claw_sound, pos_x, pos_y, pos_z ),
-		onBumpPlayer: ( robot, vel_x, vel_y, vel_z, mass ) =>
-			collide_robot_and_player( robot, vel_x, vel_y, vel_z, mass ),
+		onBumpPlayer: ( robot, vel_x, vel_y, vel_z, mass, applyDamage ) =>
+			collide_robot_and_player( robot, vel_x, vel_y, vel_z, mass, applyDamage ),
 		isPlayerCloaked: isPlayerCloaked,
 		onSpawnGatedRobot: spawnGatedRobot,
 		onBossDeath: ( robot ) => {
