@@ -20,6 +20,11 @@ function dropped_powerup_lifeleft() {
 // Tracked powerups for player pickup
 const livePowerups = [];
 
+// Effective player radius for picking up powerups/keys. The DOS game collides
+// the powerup against the player ship's full size (~4 units); the 2.5 used for
+// wall collision is tighter and makes pickups feel finicky.
+const PLAYER_PICKUP_RADIUS = 4.0;
+
 // Map of powerup ID → vclip_num (built dynamically from placed objects)
 const powerupVclipMap = {};
 // Map of powerup ID → size
@@ -348,7 +353,10 @@ export function powerup_do_frame( dt, playerPos ) {
 			const dy = playerPos.y - pw.obj.pos_y;
 			const dz = playerPos.z - pw.obj.pos_z;
 			const distSq = dx * dx + dy * dy + dz * dz;
-			const pickupRadius = pw.obj.size + 2.5; // Player radius
+			// Use the player ship's full size for pickup (~4 units), as the DOS
+			// game does, rather than the tighter 2.5 wall-collision radius —
+			// otherwise items/keys feel like they have a too-narrow grab area.
+			const pickupRadius = pw.obj.size + PLAYER_PICKUP_RADIUS;
 
 			if ( distSq < pickupRadius * pickupRadius ) {
 
