@@ -825,6 +825,12 @@ const _camMatrixWorldInverse = new THREE.Matrix4();
 const _portalBox = new THREE.Box3();
 const _portalPoint = new THREE.Vector3();
 
+// Portal-culling tolerances (Descent units). The AABB-vs-frustum portal test is
+// only an approximation; pad it and always traverse portals close to the camera
+// so segments behind nearby doorways never get culled into a black void.
+const PORTAL_FRUSTUM_PAD = 5;
+const PORTAL_NEAR_DIST = 40;
+
 function buildVisibleSegments( startSegnum, camera ) {
 
 	_visibleSegments.clear();
@@ -879,7 +885,17 @@ function buildVisibleSegments( startSegnum, camera ) {
 
 			}
 
-			if ( _frustum.intersectsBox( _portalBox ) ) {
+			// Pad the portal so openings grazing the frustum edge aren't wrongly culled.
+			_portalBox.expandByScalar( PORTAL_FRUSTUM_PAD );
+
+			// An AABB-vs-frustum test gives false negatives for a portal the camera is
+			// right at or looking through at an oblique angle — e.g. a door opening
+			// directly in front of the player. The segment beyond it would then render
+			// as a black void. Always traverse near portals; only frustum-cull distant
+			// ones (where the test is reliable and culling actually saves work).
+			const nearPortal = _portalBox.distanceToPoint( camera.position ) < PORTAL_NEAR_DIST;
+
+			if ( nearPortal || _frustum.intersectsBox( _portalBox ) ) {
 
 				_visibleSegments.add( child );
 				_bfsQueue[ _bfsQueueLength ++ ] = child;
