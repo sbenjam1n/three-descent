@@ -650,9 +650,12 @@ function updateCamera( dt ) {
 
 	const manualRollActive = ( controls_is_action_down( 'roll_left' ) === true || controls_is_action_down( 'roll_right' ) === true );
 
-	// Keyboard roll (Q/E)
-	if ( controls_is_action_down( 'roll_left' ) === true ) rotThrust_z += PLAYER_MAX_ROTTHRUST;
-	if ( controls_is_action_down( 'roll_right' ) === true ) rotThrust_z -= PLAYER_MAX_ROTTHRUST;
+	// Keyboard roll (Q/E). Roll gets an extra thrust multiplier so banking is
+	// snappy — it has no mouse-driven component (unlike pitch/yaw) and must
+	// overcome the auto-level roll rate, so at 1x it feels sluggish.
+	const ROLL_THRUST_SCALE = 1.6;
+	if ( controls_is_action_down( 'roll_left' ) === true ) rotThrust_z += PLAYER_MAX_ROTTHRUST * ROLL_THRUST_SCALE;
+	if ( controls_is_action_down( 'roll_right' ) === true ) rotThrust_z -= PLAYER_MAX_ROTTHRUST * ROLL_THRUST_SCALE;
 
 	// Apply rotational drag + thrust (ported from do_physics_sim_rot in PHYSICS.C)
 	const playerRotVel = do_physics_sim_rot( rotThrust_x, rotThrust_y, rotThrust_z, dt );
