@@ -200,12 +200,13 @@ export function bump_two_objects( robot, robotVel_x, robotVel_y, robotVel_z, rob
 // ---------------------------------------------------------------
 // Resting contact distance as a fraction of the robot's bounding-sphere
 // radius. The depenetration below is the only thing that physically *blocks*
-// the player, so this must cover the robot's visible body — too small and the
-// player clips through the body (between this radius and obj.size) without
-// ever being stopped. Keep it near the full bounding radius for reliable
-// blocking; a slight shave (0.9) gets the camera a touch closer without
-// opening a pass-through gap.
-const PLAYER_CONTACT_FRACTION = 0.9;
+// the player (robots are deliberately excluded from the swept FVI collision,
+// since a swept hard-block would freeze the player whenever a robot overlaps
+// them). So this radius must cover the robot's whole body: anything less than
+// 1.0 leaves an unblocked shell (between this radius and obj.size) that is
+// still solid model, and the player sinks through it with no resistance.
+// Full bounding radius is the closest a single sphere can block reliably.
+const PLAYER_CONTACT_FRACTION = 1.0;
 const PLAYER_CONTACT_MIN = 1.5;
 
 // Per-frame friction on the player's sideways (tangential) velocity while in
