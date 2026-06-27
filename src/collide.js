@@ -198,8 +198,10 @@ export function bump_two_objects( robot, robotVel_x, robotVel_y, robotVel_z, rob
 // Ported from: collide_robot_and_player() in COLLIDE.C lines 1052-1066
 // Called from ai.js when robot is within contact distance of player
 // ---------------------------------------------------------------
-// PLAYER_RADIUS from physics.js (player collision sphere)
-const PLAYER_COLLIDE_RADIUS = 2.5;
+// Margin added to the robot's bounding-sphere radius for the player's resting
+// contact distance. Small so the camera sits right up against the enemy (like
+// DOS), but non-zero so it never clips inside the model.
+const PLAYER_CONTACT_MARGIN = 0.5;
 
 export function collide_robot_and_player( robot, robotVel_x, robotVel_y, robotVel_z, robotMass, applyDamage ) {
 
@@ -218,10 +220,27 @@ export function collide_robot_and_player( robot, robotVel_x, robotVel_y, robotVe
 	if ( dist < 0.001 ) { nx = 0; ny = 1; nz = 0; dist = 0.001; }
 	nx /= dist; ny /= dist; nz /= dist;
 
-	// Surface contact distance: the player sphere should rest on the robot's
-	// surface, never inside it.
-	const contactDist = obj.size + PLAYER_COLLIDE_RADIUS;
+	// Surface contact distance: the player should rest right on the robot's
+	// surface, never inside it and never floating far away.
+	const contactDist = obj.size + PLAYER_CONTACT_MARGIN;
 	const penetration = contactDist - dist;
+
+	const playerMass = 4.0; // PLAYER_MASS
+	const massFactor = 2.0 * robotMass * playerMass / ( robotMass + playerMass );
+
+	// --- Closing speed (BEFORE we cancel the player's velocity) --------------
+	// This must be measured from the original velocities — the depenetration
+	// below kills the player's inward velocity, so capturing approach first is
+	// what lets the robot actually feel the initial ram.
+	const rel_x = pv.x - robotVel_x;
+	const rel_y = pv.y - robotVel_y;
+	const rel_z = pv.z - robotVel_z;
+	const approach = - ( rel_x * nx + rel_y * ny + rel_z * nz );
+
+	// Separating impulse on the robot, from the real closing speed. A hard ram
+	// (large approach) bumps it noticeably; resting contact still drifts it off.
+	const impulse = Math.max( approach, 0.4 ) * massFactor;
+	phys_apply_force( robot, - nx * impulse, - ny * impulse, - nz * impulse );
 
 	// --- Position depenetration ---------------------------------------------
 	// This is what makes ramming "catch" on the enemy: every contact frame we
@@ -230,19 +249,17 @@ export function collide_robot_and_player( robot, robotVel_x, robotVel_y, robotVe
 	// cooldown) so the player is held firmly at the surface while pushing.
 	if ( penetration > 0 && _setPlayerPos !== null ) {
 
-		// Robot is far heavier-feeling than the player: give the player most of
-		// the separation (0.85) and nudge the robot the rest (slight bounce).
+		// Give the player most of the separation and nudge the robot the rest,
+		// so the enemy can still be slowly shoved into a wall.
 		_setPlayerPos(
-			pp.x + nx * penetration * 0.85,
-			pp.y + ny * penetration * 0.85,
-			pp.z + nz * penetration * 0.85
+			pp.x + nx * penetration * 0.8,
+			pp.y + ny * penetration * 0.8,
+			pp.z + nz * penetration * 0.8
 		);
 
-		// Push the robot slightly the other way — the "very very slight bounce".
-		// Position nudge so the robot can be slowly shoved into a wall.
-		obj.pos_x -= nx * penetration * 0.15;
-		obj.pos_y -= ny * penetration * 0.15;
-		obj.pos_z -= nz * penetration * 0.15;
+		obj.pos_x -= nx * penetration * 0.2;
+		obj.pos_y -= ny * penetration * 0.2;
+		obj.pos_z -= nz * penetration * 0.2;
 
 		// Kill the player's inward velocity component so they don't keep
 		// accelerating into the robot — they stay "caught" at the surface and
@@ -257,20 +274,6 @@ export function collide_robot_and_player( robot, robotVel_x, robotVel_y, robotVe
 		}
 
 	}
-
-	// Closing speed along the normal (positive = player and robot approaching).
-	const rel_x = pv.x - robotVel_x;
-	const rel_y = pv.y - robotVel_y;
-	const rel_z = pv.z - robotVel_z;
-	const approach = - ( rel_x * nx + rel_y * ny + rel_z * nz );
-
-	const playerMass = 4.0; // PLAYER_MASS
-	const massFactor = 2.0 * robotMass * playerMass / ( robotMass + playerMass );
-
-	// Gentle separating impulse — keeps the robot drifting off the player even
-	// after depenetration, gives the bounce some life.
-	const impulse = Math.max( approach, 0.25 ) * massFactor;
-	phys_apply_force( robot, - nx * impulse, - ny * impulse, - nz * impulse );
 
 	// --- Damage / sound (cooldown-gated) ------------------------------------
 	if ( applyDamage !== true ) return;
