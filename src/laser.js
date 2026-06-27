@@ -1962,6 +1962,15 @@ export function laser_do_weapon_sequence( dt ) {
 				w.thrust_y = 0;
 				w.thrust_z = 0;
 
+				// Flares open openable doors they strike (proximity bombs do not).
+				// Ported from: collide_weapon_and_wall() in COLLIDE.C
+				if ( w.weapon_type === FLARE_ID && _onWallHit !== null ) {
+
+					const wallSeg = ( fvi_result.hit_side_seg !== - 1 ) ? fvi_result.hit_side_seg : w.segnum;
+					_onWallHit( w.pos_x, w.pos_y, w.pos_z, wallSeg, fvi_result.hit_side, w.damage, w.weapon_type );
+
+				}
+
 				// Update mesh position to wall contact point
 				if ( w.modelMesh !== null ) {
 

@@ -24,6 +24,9 @@ import { digi_play_sample, digi_play_sample_3d,
 	SOUND_CONTROL_CENTER_HIT, SOUND_CONTROL_CENTER_DESTROYED,
 	SOUND_WEAPON_HIT_DOOR } from './digi.js';
 
+// Flare weapon id (matches FLARE_ID in laser.js / weapon.js)
+const FLARE_ID = 9;
+
 // Powerup type constants (from POWERUP.H)
 export const POW_EXTRA_LIFE = 0;
 export const POW_ENERGY = 1;
@@ -693,6 +696,33 @@ function weapon_open_door( segnum, side ) {
 // Ported from: collide_weapon_and_wall() in COLLIDE.C lines 862-982
 // ---------------------------------------------------------------
 export function collide_weapon_and_wall( pos_x, pos_y, pos_z, segnum, hit_side, damage, weapon_type ) {
+
+	// Flares stick to walls rather than exploding: they don't spark or damage
+	// walls, but they do open openable doors (same key/lock/state guard as the
+	// player flying into a door).
+	// Ported from: collide_weapon_and_wall() flare handling in COLLIDE.C
+	if ( weapon_type === FLARE_ID ) {
+
+		if ( segnum >= 0 && hit_side >= 0 && hit_side <= 5 ) {
+
+			const seg = Segments[ segnum ];
+			if ( seg !== undefined ) {
+
+				const wn = seg.sides[ hit_side ].wall_num;
+				if ( wn !== - 1 && Walls[ wn ] !== undefined && Walls[ wn ].type === WALL_DOOR ) {
+
+					digi_play_sample_3d( SOUND_WEAPON_HIT_DOOR, 0.5, pos_x, pos_y, pos_z );
+					weapon_open_door( segnum, hit_side );
+
+				}
+
+			}
+
+		}
+
+		return;
+
+	}
 
 	// Check for destructible monitors (eclip with dest_bm_num)
 	// Ported from: collide_weapon_and_wall() in COLLIDE.C line 877
