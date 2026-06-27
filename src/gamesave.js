@@ -94,6 +94,22 @@ function verify_object( obj ) {
 
 		}
 
+		// Make sure shields are correct — the level file's stored shields are a
+		// placeholder; a robot's real hit points come from its type strength.
+		// Without this every robot keeps the file's (uniform) value and they all
+		// take the same number of hits to kill.
+		// Ported from: verify_object() in GAMESAVE.C — obj->shields = Robot_info[obj->id].strength
+		{
+
+			const ri = Robot_info[ obj.id ];
+			if ( ri !== undefined && ri.strength > 0 ) {
+
+				obj.shields = ri.strength;
+
+			}
+
+		}
+
 		// Fix physics mass and drag from Robot_info
 		if ( obj.movement_type === MT_PHYSICS && obj.mtype !== null ) {
 
