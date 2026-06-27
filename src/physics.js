@@ -357,7 +357,11 @@ export function phys_apply_rot( force_x, force_y, force_z ) {
 // dt = frame time
 export function do_physics_sim_rot( rotThrust_x, rotThrust_y, rotThrust_z, dt ) {
 
-	const rotDrag = PLAYER_DRAG * 2.5;
+	// Rotational drag matches linear drag — the original do_physics_sim() applies
+	// a single drag to both linear and angular velocity. A higher rotational drag
+	// drops the terminal roll rate below the auto-level roll rate, making banking
+	// feel stiff and slow to respond.
+	const rotDrag = PLAYER_DRAG;
 
 	const rotAccel_x = rotThrust_x / PLAYER_MASS;
 	const rotAccel_y = rotThrust_y / PLAYER_MASS;

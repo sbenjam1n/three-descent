@@ -5,7 +5,8 @@ import { Segments, Walls, Num_segments, GameTime } from './mglobal.js';
 import { TmapInfos, TMI_VOLATILE, Powerup_info, N_powerup_types } from './bm.js';
 import { Robot_info, N_robot_types, Weapon_info, N_weapon_types } from './bm.js';
 import { get_side_dist } from './gameseg.js';
-import { wall_damage, wall_open_door, WALL_BLASTABLE, WALL_DOOR } from './wall.js';
+import { wall_damage, wall_open_door, WALL_BLASTABLE, WALL_DOOR,
+	WALL_DOOR_CLOSED, WALL_DOOR_LOCKED, KEY_NONE } from './wall.js';
 import { cntrlcen_notify_hit } from './cntrlcen.js';
 import { find_vector_intersection, HIT_WALL, FQ_TRANSWALL } from './fvi.js';
 import { find_point_seg } from './gameseg.js';
@@ -22,6 +23,9 @@ import { digi_play_sample, digi_play_sample_3d,
 	SOUND_ROBOT_HIT_PLAYER,
 	SOUND_CONTROL_CENTER_HIT, SOUND_CONTROL_CENTER_DESTROYED,
 	SOUND_WEAPON_HIT_DOOR } from './digi.js';
+
+// Flare weapon id (matches FLARE_ID in laser.js / weapon.js)
+const FLARE_ID = 9;
 
 // Powerup type constants (from POWERUP.H)
 export const POW_EXTRA_LIFE = 0;
@@ -664,11 +668,61 @@ export function collide_robot_and_weapon( robotIndex, damage, weapon_type, vel_x
 
 }
 
+// Open a door that was hit by a weapon, but only if the player could open it
+// by flying into it: it must require no keys, be currently closed, and not be
+// locked. Without this guard, shooting a key-required or locked door would pop
+// it open and let the player bypass the key requirement.
+// Ported from: collide_weapon_and_wall() door check in COLLIDE.C
+function weapon_open_door( segnum, side ) {
+
+	const wn = Segments[ segnum ].sides[ side ].wall_num;
+	if ( wn === - 1 ) return;
+
+	const w = Walls[ wn ];
+	if ( w === undefined ) return;
+
+	if ( w.keys === KEY_NONE &&
+		w.state === WALL_DOOR_CLOSED &&
+		( w.flags & WALL_DOOR_LOCKED ) === 0 ) {
+
+		wall_open_door( segnum, side );
+
+	}
+
+}
+
 // ---------------------------------------------------------------
 // collide_weapon_and_wall
 // Ported from: collide_weapon_and_wall() in COLLIDE.C lines 862-982
 // ---------------------------------------------------------------
 export function collide_weapon_and_wall( pos_x, pos_y, pos_z, segnum, hit_side, damage, weapon_type ) {
+
+	// Flares stick to walls rather than exploding: they don't spark or damage
+	// walls, but they do open openable doors (same key/lock/state guard as the
+	// player flying into a door).
+	// Ported from: collide_weapon_and_wall() flare handling in COLLIDE.C
+	if ( weapon_type === FLARE_ID ) {
+
+		if ( segnum >= 0 && hit_side >= 0 && hit_side <= 5 ) {
+
+			const seg = Segments[ segnum ];
+			if ( seg !== undefined ) {
+
+				const wn = seg.sides[ hit_side ].wall_num;
+				if ( wn !== - 1 && Walls[ wn ] !== undefined && Walls[ wn ].type === WALL_DOOR ) {
+
+					digi_play_sample_3d( SOUND_WEAPON_HIT_DOOR, 0.5, pos_x, pos_y, pos_z );
+					weapon_open_door( segnum, hit_side );
+
+				}
+
+			}
+
+		}
+
+		return;
+
+	}
 
 	// Check for destructible monitors (eclip with dest_bm_num)
 	// Ported from: collide_weapon_and_wall() in COLLIDE.C line 877
@@ -737,7 +791,7 @@ export function collide_weapon_and_wall( pos_x, pos_y, pos_z, segnum, hit_side, 
 						} else if ( Walls[ wn ].type === WALL_DOOR ) {
 
 							digi_play_sample_3d( SOUND_WEAPON_HIT_DOOR, 0.5, pos_x, pos_y, pos_z );
-							wall_open_door( segnum, hit_side );
+							weapon_open_door( segnum, hit_side );
 
 						}
 
@@ -801,7 +855,7 @@ export function collide_weapon_and_wall( pos_x, pos_y, pos_z, segnum, hit_side, 
 						// Weapon hits door — play door-hit sound and open it
 						// Ported from: COLLIDE.C line 949 — digi_link_sound_to_pos(SOUND_WEAPON_HIT_DOOR, ...)
 						digi_play_sample_3d( SOUND_WEAPON_HIT_DOOR, 0.5, pos_x, pos_y, pos_z );
-						wall_open_door( segnum, hit_side );
+						weapon_open_door( segnum, hit_side );
 
 					}
 
@@ -823,7 +877,7 @@ export function collide_weapon_and_wall( pos_x, pos_y, pos_z, segnum, hit_side, 
 
 						} else if ( Walls[ wn ].type === WALL_DOOR ) {
 
-							wall_open_door( segnum, s );
+							weapon_open_door( segnum, s );
 							break;
 
 						}

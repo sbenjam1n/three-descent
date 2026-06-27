@@ -639,10 +639,12 @@ function updateCamera( dt ) {
 	if ( controls_is_pointer_locked() ) {
 
 		// Mouse movement maps to rotational thrust (pitch + yaw)
-		// Scale: mouseSpeed converts pixels to a normalized input, then scale by max_rotthrust
-		rotThrust_y = - mouse.x * mouseSpeed * PLAYER_MAX_ROTTHRUST * 8.0;
+		// Scale: mouseSpeed converts pixels to a normalized input, then scale by max_rotthrust.
+		// The 3.2 factor keeps per-pixel sensitivity unchanged after the rotational drag
+		// was lowered to match linear drag (sensitivity scales with thrust/drag).
+		rotThrust_y = - mouse.x * mouseSpeed * PLAYER_MAX_ROTTHRUST * 3.2;
 		const invertY = config_get_invert_mouse_y() === true ? 1.0 : - 1.0;
-		rotThrust_x = invertY * mouse.y * mouseSpeed * PLAYER_MAX_ROTTHRUST * 8.0;
+		rotThrust_x = invertY * mouse.y * mouseSpeed * PLAYER_MAX_ROTTHRUST * 3.2;
 
 	}
 

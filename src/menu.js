@@ -7,6 +7,7 @@ import { gr_get_string_size, gr_string } from './font.js';
 import { NORMAL_FONT, CURRENT_FONT, SUBTITLE_FONT, TITLE_FONT, GAME_FONT } from './gamefont.js';
 import { credits_show } from './credits.js';
 import { scores_view } from './scores.js';
+import { mission_get_last_level } from './mission.js';
 import { config_get_invert_mouse_y, config_set_invert_mouse_y,
 	config_get_texture_filtering, config_set_texture_filtering } from './config.js';
 
@@ -64,9 +65,15 @@ export async function do_main_menu( hogFile, defaultDifficulty, gamePalette ) {
 	return new Promise( ( resolve ) => {
 
 		let selectedIndex = 0;
-		let state = 'main'; // 'main' or 'difficulty'
-		let itemYPositions = []; // { y, h } for each menu item (in 320x200 space)
+		let state = 'main'; // 'main', 'difficulty' or 'level'
+		let itemYPositions = []; // { y, h, x?, w? } for each menu item (in 320x200 space)
 		let busy = false; // Prevent multiple sub-screen activations
+
+		// Level-select state. After choosing a difficulty for NEW GAME the player
+		// picks a starting level — on the web build all mission levels are unlocked.
+		let selectedDifficulty = ( defaultDifficulty != null ) ? defaultDifficulty : 1;
+		let levelCount = 1;			// number of normal levels in the mission
+		let levelRowsPerCol = 1;	// rows per column in the level grid (for L/R nav)
 
 		function renderMainMenu() {
 
@@ -173,6 +180,106 @@ export async function do_main_menu( hogFile, defaultDifficulty, gamePalette ) {
 			}
 
 			titleCtx.putImageData( imageData, 0, 0 );
+
+		}
+
+		// Level-select menu. Lists every normal level in the mission (all unlocked
+		// on the web build) and lets the player choose where NEW GAME starts.
+		// Levels are laid out in columns so large missions still fit on screen.
+		function renderLevelMenu() {
+
+			state = 'level';
+			itemYPositions = [];
+
+			titleCtx.putImageData( _bgImageData, 0, 0 );
+			const imageData = titleCtx.getImageData( 0, 0, titleCanvas.width, titleCanvas.height );
+
+			const normalFont = NORMAL_FONT();
+			const currentFont = CURRENT_FONT();
+			const subtitleFont = SUBTITLE_FONT();
+
+			if ( normalFont === null || currentFont === null ) {
+
+				titleCtx.putImageData( imageData, 0, 0 );
+				return;
+
+			}
+
+			levelCount = Math.max( 1, mission_get_last_level() );
+			if ( selectedIndex >= levelCount ) selectedIndex = levelCount - 1;
+			if ( selectedIndex < 0 ) selectedIndex = 0;
+
+			const titleFont = subtitleFont !== null ? subtitleFont : normalFont;
+			const itemHeight = normalFont.ft_h + 2;
+
+			// Title near the top, items filling the space down to a bottom hint.
+			const titleY = 36;
+			gr_string( imageData, titleFont, 0x8000, titleY, 'SELECT LEVEL', gamePalette );
+
+			const itemsStartY = titleY + titleFont.ft_h + 8;
+			const bottomY = 186;
+			const availHeight = bottomY - itemsStartY;
+
+			const maxRows = Math.max( 1, Math.floor( availHeight / itemHeight ) );
+			const numCols = Math.ceil( levelCount / maxRows );
+			const rowsPerCol = Math.ceil( levelCount / numCols );
+			levelRowsPerCol = rowsPerCol;
+
+			const colWidth = 320 / numCols;
+
+			for ( let L = 0; L < levelCount; L ++ ) {
+
+				const col = Math.floor( L / rowsPerCol );
+				const row = L % rowsPerCol;
+				const isSelected = ( L === selectedIndex );
+				const font = isSelected ? currentFont : normalFont;
+
+				const label = 'LEVEL ' + ( L + 1 );
+				const size = gr_get_string_size( font, label );
+				const colCenter = col * colWidth + colWidth / 2;
+				const x = Math.floor( colCenter - size.width / 2 );
+				const y = itemsStartY + row * itemHeight;
+
+				itemYPositions.push( {
+					x: Math.floor( col * colWidth ),
+					y: y,
+					w: Math.floor( colWidth ),
+					h: itemHeight
+				} );
+
+				gr_string( imageData, font, x, y, label, gamePalette );
+
+			}
+
+			const smallFont = GAME_FONT();
+
+			if ( smallFont !== null ) {
+
+				gr_string( imageData, smallFont, 0x8000, bottomY + 2,
+					'ENTER: START   ESC: BACK', gamePalette );
+
+			}
+
+			titleCtx.putImageData( imageData, 0, 0 );
+
+		}
+
+		// Number of selectable items in the current state.
+		function getItemCount() {
+
+			if ( state === 'main' ) return MENU_ITEMS.length;
+			if ( state === 'difficulty' ) return DIFFICULTY_NAMES.length;
+			if ( state === 'level' ) return levelCount;
+			return 0;
+
+		}
+
+		// Re-render whichever menu is currently active.
+		function renderCurrent() {
+
+			if ( state === 'main' ) renderMainMenu();
+			else if ( state === 'difficulty' ) renderDifficultyMenu();
+			else if ( state === 'level' ) renderLevelMenu();
 
 		}
 
@@ -514,9 +621,20 @@ export async function do_main_menu( hogFile, defaultDifficulty, gamePalette ) {
 		function handleDifficultySelect( difficulty ) {
 
 			if ( busy === true ) return;
+
+			// Remember the difficulty and advance to level selection.
+			selectedDifficulty = difficulty;
+			selectedIndex = 0;
+			renderLevelMenu();
+
+		}
+
+		function handleLevelSelect( levelIdx ) {
+
+			if ( busy === true ) return;
 			busy = true;
 			cleanup();
-			resolve( { action: 'new_game', difficulty: difficulty } );
+			resolve( { action: 'new_game', difficulty: selectedDifficulty, level: levelIdx + 1 } );
 
 		}
 
@@ -538,18 +656,20 @@ export async function do_main_menu( hogFile, defaultDifficulty, gamePalette ) {
 
 		}
 
-		// Find which menu item is at the given 320x200 y coordinate
-		function findItemAtY( y200 ) {
+		// Find which menu item is at the given 320x200 coordinate. Items that
+		// define an x/w span (the multi-column level grid) are matched on x too;
+		// single-column menus match on y alone.
+		function findItemAt( x200, y200 ) {
 
 			for ( let i = 0; i < itemYPositions.length; i ++ ) {
 
 				const item = itemYPositions[ i ];
 
-				if ( y200 >= item.y && y200 < item.y + item.h ) {
+				if ( y200 < item.y || y200 >= item.y + item.h ) continue;
 
-					return i;
+				if ( item.w !== undefined && ( x200 < item.x || x200 >= item.x + item.w ) ) continue;
 
-				}
+				return i;
 
 			}
 
@@ -562,21 +682,12 @@ export async function do_main_menu( hogFile, defaultDifficulty, gamePalette ) {
 			if ( busy === true ) return;
 
 			const pos = viewportTo320x200( e.clientX, e.clientY );
-			const idx = findItemAtY( pos.y );
+			const idx = findItemAt( pos.x, pos.y );
 
 			if ( idx !== - 1 && idx !== selectedIndex ) {
 
 				selectedIndex = idx;
-
-				if ( state === 'main' ) {
-
-					renderMainMenu();
-
-				} else {
-
-					renderDifficultyMenu();
-
-				}
+				renderCurrent();
 
 			}
 
@@ -587,7 +698,7 @@ export async function do_main_menu( hogFile, defaultDifficulty, gamePalette ) {
 			if ( busy === true ) return;
 
 			const pos = viewportTo320x200( e.clientX, e.clientY );
-			const idx = findItemAtY( pos.y );
+			const idx = findItemAt( pos.x, pos.y );
 
 			if ( idx !== - 1 ) {
 
@@ -600,6 +711,10 @@ export async function do_main_menu( hogFile, defaultDifficulty, gamePalette ) {
 				} else if ( state === 'difficulty' ) {
 
 					handleDifficultySelect( idx );
+
+				} else if ( state === 'level' ) {
+
+					handleLevelSelect( idx );
 
 				}
 
@@ -614,38 +729,34 @@ export async function do_main_menu( hogFile, defaultDifficulty, gamePalette ) {
 			if ( e.key === 'ArrowUp' ) {
 
 				e.preventDefault();
-				selectedIndex --;
-
-				const maxItems = ( state === 'main' ) ? MENU_ITEMS.length : DIFFICULTY_NAMES.length;
-
-				if ( selectedIndex < 0 ) selectedIndex = maxItems - 1;
-
-				if ( state === 'main' ) {
-
-					renderMainMenu();
-
-				} else {
-
-					renderDifficultyMenu();
-
-				}
+				const maxItems = getItemCount();
+				selectedIndex = ( selectedIndex - 1 + maxItems ) % maxItems;
+				renderCurrent();
 
 			} else if ( e.key === 'ArrowDown' ) {
 
 				e.preventDefault();
-				selectedIndex ++;
+				const maxItems = getItemCount();
+				selectedIndex = ( selectedIndex + 1 ) % maxItems;
+				renderCurrent();
 
-				const maxItems = ( state === 'main' ) ? MENU_ITEMS.length : DIFFICULTY_NAMES.length;
+			} else if ( e.key === 'ArrowLeft' ) {
 
-				if ( selectedIndex >= maxItems ) selectedIndex = 0;
+				if ( state === 'level' ) {
 
-				if ( state === 'main' ) {
+					e.preventDefault();
+					if ( selectedIndex - levelRowsPerCol >= 0 ) selectedIndex -= levelRowsPerCol;
+					renderCurrent();
 
-					renderMainMenu();
+				}
 
-				} else {
+			} else if ( e.key === 'ArrowRight' ) {
 
-					renderDifficultyMenu();
+				if ( state === 'level' ) {
+
+					e.preventDefault();
+					if ( selectedIndex + levelRowsPerCol < getItemCount() ) selectedIndex += levelRowsPerCol;
+					renderCurrent();
 
 				}
 
@@ -661,6 +772,10 @@ export async function do_main_menu( hogFile, defaultDifficulty, gamePalette ) {
 
 					handleDifficultySelect( selectedIndex );
 
+				} else if ( state === 'level' ) {
+
+					handleLevelSelect( selectedIndex );
+
 				}
 
 			} else if ( e.key === 'Escape' ) {
@@ -671,6 +786,11 @@ export async function do_main_menu( hogFile, defaultDifficulty, gamePalette ) {
 
 					selectedIndex = 0;
 					renderMainMenu();
+
+				} else if ( state === 'level' ) {
+
+					selectedIndex = selectedDifficulty;
+					renderDifficultyMenu();
 
 				}
 
