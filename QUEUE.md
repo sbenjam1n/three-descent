@@ -41,7 +41,7 @@ _None._
 
 | ID | Title | Status | Plan | Notes |
 | --- | --- | --- | --- | --- |
-| Q-001 | AI asset pipeline — Phase 0 (extract + manifest + runtime override loader) | 🔲 `QUEUED` | — | Reusable harness for AI-upscaled/generated textures. Extract PIG bitmaps → `assets/original/` + `manifest.json`; runtime override loader at the 4 texture funnels. See chat research. Plan via `/index`. |
+| Q-001 | AI asset pipeline — Phase 0 (extract + manifest + runtime override loader) | 📝 `PLANNED` | [Q-001 v1.0](./Plans/Q-001-ai-asset-pipeline-v1.0.md) | Reusable harness for AI-upscaled/generated textures. Extract PIG bitmaps → `assets/original/` + `manifest.json`; runtime override loader at the 4 texture funnels. |
 | Q-002 | Player–robot ramming feel — final tuning pass | ❄️ `ICEBOX` | — | Awaiting playtest feedback. Knobs: `PLAYER_CONTACT_FRACTION`, `PLAYER_CONTACT_FRICTION`, robot anti-slide damp. |
 
 ## Done log
