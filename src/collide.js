@@ -86,6 +86,7 @@ let _addLevelHostagesSaved = null;
 let _getHostagesInLevel = null;
 let _getHostagesSavedInLevel = null;
 let _getPlayerPos = null;
+let _setPlayerPos = null;
 let _getPlayerSegnum = null;
 let _getScene = null;
 let _updateHUD = null;
@@ -137,6 +138,7 @@ export function collide_set_externals( ext ) {
 	if ( ext.getHostagesInLevel !== undefined ) _getHostagesInLevel = ext.getHostagesInLevel;
 	if ( ext.getHostagesSavedInLevel !== undefined ) _getHostagesSavedInLevel = ext.getHostagesSavedInLevel;
 	if ( ext.getPlayerPos !== undefined ) _getPlayerPos = ext.getPlayerPos;
+	if ( ext.setPlayerPos !== undefined ) _setPlayerPos = ext.setPlayerPos;
 	if ( ext.getPlayerSegnum !== undefined ) _getPlayerSegnum = ext.getPlayerSegnum;
 	if ( ext.getScene !== undefined ) _getScene = ext.getScene;
 	if ( ext.updateHUD !== undefined ) _updateHUD = ext.updateHUD;
@@ -196,9 +198,82 @@ export function bump_two_objects( robot, robotVel_x, robotVel_y, robotVel_z, rob
 // Ported from: collide_robot_and_player() in COLLIDE.C lines 1052-1066
 // Called from ai.js when robot is within contact distance of player
 // ---------------------------------------------------------------
-export function collide_robot_and_player( robot, robotVel_x, robotVel_y, robotVel_z, robotMass ) {
+// PLAYER_RADIUS from physics.js (player collision sphere)
+const PLAYER_COLLIDE_RADIUS = 2.5;
+
+export function collide_robot_and_player( robot, robotVel_x, robotVel_y, robotVel_z, robotMass, applyDamage ) {
 
 	const obj = robot.obj;
+
+	if ( _getPlayerPos === null ) return;
+
+	const pp = _getPlayerPos();
+	const pv = getPlayerVelocity();
+
+	// Collision normal: from the robot toward the player.
+	let nx = pp.x - obj.pos_x;
+	let ny = pp.y - obj.pos_y;
+	let nz = pp.z - obj.pos_z;
+	let dist = Math.sqrt( nx * nx + ny * ny + nz * nz );
+	if ( dist < 0.001 ) { nx = 0; ny = 1; nz = 0; dist = 0.001; }
+	nx /= dist; ny /= dist; nz /= dist;
+
+	// Surface contact distance: the player sphere should rest on the robot's
+	// surface, never inside it.
+	const contactDist = obj.size + PLAYER_COLLIDE_RADIUS;
+	const penetration = contactDist - dist;
+
+	// --- Position depenetration ---------------------------------------------
+	// This is what makes ramming "catch" on the enemy: every contact frame we
+	// shove the player back out to the robot surface so the camera never ends
+	// up inside the model. This runs every frame (not gated by the damage
+	// cooldown) so the player is held firmly at the surface while pushing.
+	if ( penetration > 0 && _setPlayerPos !== null ) {
+
+		// Robot is far heavier-feeling than the player: give the player most of
+		// the separation (0.85) and nudge the robot the rest (slight bounce).
+		_setPlayerPos(
+			pp.x + nx * penetration * 0.85,
+			pp.y + ny * penetration * 0.85,
+			pp.z + nz * penetration * 0.85
+		);
+
+		// Push the robot slightly the other way — the "very very slight bounce".
+		// Position nudge so the robot can be slowly shoved into a wall.
+		obj.pos_x -= nx * penetration * 0.15;
+		obj.pos_y -= ny * penetration * 0.15;
+		obj.pos_z -= nz * penetration * 0.15;
+
+		// Kill the player's inward velocity component so they don't keep
+		// accelerating into the robot — they stay "caught" at the surface and
+		// only the steady thrust pushes the robot forward.
+		const inward = pv.x * ( - nx ) + pv.y * ( - ny ) + pv.z * ( - nz );
+		if ( inward > 0 ) {
+
+			pv.x -= ( - nx ) * inward;
+			pv.y -= ( - ny ) * inward;
+			pv.z -= ( - nz ) * inward;
+
+		}
+
+	}
+
+	// Closing speed along the normal (positive = player and robot approaching).
+	const rel_x = pv.x - robotVel_x;
+	const rel_y = pv.y - robotVel_y;
+	const rel_z = pv.z - robotVel_z;
+	const approach = - ( rel_x * nx + rel_y * ny + rel_z * nz );
+
+	const playerMass = 4.0; // PLAYER_MASS
+	const massFactor = 2.0 * robotMass * playerMass / ( robotMass + playerMass );
+
+	// Gentle separating impulse — keeps the robot drifting off the player even
+	// after depenetration, gives the bounce some life.
+	const impulse = Math.max( approach, 0.25 ) * massFactor;
+	phys_apply_force( robot, - nx * impulse, - ny * impulse, - nz * impulse );
+
+	// --- Damage / sound (cooldown-gated) ------------------------------------
+	if ( applyDamage !== true ) return;
 
 	// Create awareness event — collision gets attention
 	// Ported from: COLLIDE.C line 1054 — create_awareness_event(player, PA_PLAYER_COLLISION)
@@ -210,46 +285,11 @@ export function collide_robot_and_player( robot, robotVel_x, robotVel_y, robotVe
 	// Play bump sound
 	digi_play_sample_3d( SOUND_ROBOT_HIT_PLAYER, 0.8, obj.pos_x, obj.pos_y, obj.pos_z );
 
-	if ( _getPlayerPos === null ) return;
+	// Damage scales with how hard the hit was. Resting contact (small approach)
+	// gives a steady trickle of damage while you grind into the robot.
+	const damage = 1.0 + ( Math.max( approach, 0 ) * massFactor ) / ( 4.0 * 8.0 );
 
-	const pp = _getPlayerPos();
-	const pv = getPlayerVelocity();
-
-	// Collision normal: from the robot toward the player. The bump and damage
-	// must be driven by the *approach* (relative) velocity along this normal, not
-	// the robot's velocity alone — otherwise ramming a stationary robot does
-	// nothing and the player slides straight through it.
-	let nx = pp.x - obj.pos_x;
-	let ny = pp.y - obj.pos_y;
-	let nz = pp.z - obj.pos_z;
-	let nmag = Math.sqrt( nx * nx + ny * ny + nz * nz );
-	if ( nmag < 0.001 ) { nx = 0; ny = 1; nz = 0; nmag = 1; }
-	nx /= nmag; ny /= nmag; nz /= nmag;
-
-	// Closing speed along the normal (positive = player and robot approaching).
-	const rel_x = pv.x - robotVel_x;
-	const rel_y = pv.y - robotVel_y;
-	const rel_z = pv.z - robotVel_z;
-	const approach = - ( rel_x * nx + rel_y * ny + rel_z * nz );
-
-	const playerMass = 4.0; // PLAYER_MASS
-	const massFactor = 2.0 * robotMass * playerMass / ( robotMass + playerMass );
-
-	// Always separate the two a bit (min push) so the player can't sit inside a
-	// robot, then add the impulse from the actual closing speed.
-	const impulse = Math.max( approach, 0.5 ) * massFactor;
-
-	phys_apply_force_to_player( nx * impulse * 0.25, ny * impulse * 0.25, nz * impulse * 0.25 );
-	phys_apply_force( robot, - nx * impulse, - ny * impulse, - nz * impulse );
-
-	// Damage scales with how hard the hit was (relative closing speed).
-	const damage = ( Math.max( approach, 0 ) * massFactor ) / ( 4.0 * 8.0 );
-
-	if ( damage > 0.5 ) {
-
-		apply_damage_to_player( damage, pp.x, pp.y, pp.z );
-
-	}
+	apply_damage_to_player( damage, pp.x, pp.y, pp.z );
 
 }
 

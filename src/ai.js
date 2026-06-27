@@ -2666,21 +2666,30 @@ function do_ai_for_robot( robot, playerPos, robotIndex ) {
 
 	// Robot-player bump collision check
 	// Ported from: collide_robot_and_player() in COLLIDE.C lines 1052-1066
-	if ( _onBumpPlayer !== null && ailp.bump_cooldown <= 0 ) {
+	// Depenetration (the "caught on the enemy" feel) must run on EVERY contact
+	// frame so the player is held at the robot surface continuously. Only the
+	// damage and bump sound are throttled by bump_cooldown.
+	if ( _onBumpPlayer !== null ) {
 
 		const bumpDist = obj.size + PLAYER_SIZE;
 		if ( dist < bumpDist && dist > 0.01 ) {
 
 			const robotMass = ( obj.mtype != null && obj.mtype.mass > 0 ) ? obj.mtype.mass : 4.0;
-			_onBumpPlayer( robot, ailp.vel_x, ailp.vel_y, ailp.vel_z, robotMass );
-			ailp.bump_cooldown = BUMP_COOLDOWN;
+			const applyDamage = ( ailp.bump_cooldown <= 0 );
+			_onBumpPlayer( robot, ailp.vel_x, ailp.vel_y, ailp.vel_z, robotMass, applyDamage );
 
-			// Hiding robots find new hiding spot when bumped by player
-			// Ported from: do_ai_robot_hit() AI.C line 1798
-			if ( ailp.behavior === AIB_HIDE ) {
+			if ( applyDamage ) {
 
-				ailp.mode = AIM_HIDE;
-				ailp.submode = AISM_GOHIDE;
+				ailp.bump_cooldown = BUMP_COOLDOWN;
+
+				// Hiding robots find new hiding spot when bumped by player
+				// Ported from: do_ai_robot_hit() AI.C line 1798
+				if ( ailp.behavior === AIB_HIDE ) {
+
+					ailp.mode = AIM_HIDE;
+					ailp.submode = AISM_GOHIDE;
+
+				}
 
 			}
 
