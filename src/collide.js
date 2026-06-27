@@ -210,16 +210,43 @@ export function collide_robot_and_player( robot, robotVel_x, robotVel_y, robotVe
 	// Play bump sound
 	digi_play_sample_3d( SOUND_ROBOT_HIT_PLAYER, 0.8, obj.pos_x, obj.pos_y, obj.pos_z );
 
-	// Apply physics bump
-	bump_two_objects( robot, robotVel_x, robotVel_y, robotVel_z, robotMass );
+	if ( _getPlayerPos === null ) return;
 
-	// Apply bump damage to player (only if significant force)
-	const forceMag = Math.sqrt( robotVel_x * robotVel_x + robotVel_y * robotVel_y + robotVel_z * robotVel_z ) * robotMass;
-	const damage = forceMag / ( 4.0 * 8.0 ); // force / (mass * 8), ported from apply_force_damage
+	const pp = _getPlayerPos();
+	const pv = getPlayerVelocity();
+
+	// Collision normal: from the robot toward the player. The bump and damage
+	// must be driven by the *approach* (relative) velocity along this normal, not
+	// the robot's velocity alone — otherwise ramming a stationary robot does
+	// nothing and the player slides straight through it.
+	let nx = pp.x - obj.pos_x;
+	let ny = pp.y - obj.pos_y;
+	let nz = pp.z - obj.pos_z;
+	let nmag = Math.sqrt( nx * nx + ny * ny + nz * nz );
+	if ( nmag < 0.001 ) { nx = 0; ny = 1; nz = 0; nmag = 1; }
+	nx /= nmag; ny /= nmag; nz /= nmag;
+
+	// Closing speed along the normal (positive = player and robot approaching).
+	const rel_x = pv.x - robotVel_x;
+	const rel_y = pv.y - robotVel_y;
+	const rel_z = pv.z - robotVel_z;
+	const approach = - ( rel_x * nx + rel_y * ny + rel_z * nz );
+
+	const playerMass = 4.0; // PLAYER_MASS
+	const massFactor = 2.0 * robotMass * playerMass / ( robotMass + playerMass );
+
+	// Always separate the two a bit (min push) so the player can't sit inside a
+	// robot, then add the impulse from the actual closing speed.
+	const impulse = Math.max( approach, 0.5 ) * massFactor;
+
+	phys_apply_force_to_player( nx * impulse * 0.25, ny * impulse * 0.25, nz * impulse * 0.25 );
+	phys_apply_force( robot, - nx * impulse, - ny * impulse, - nz * impulse );
+
+	// Damage scales with how hard the hit was (relative closing speed).
+	const damage = ( Math.max( approach, 0 ) * massFactor ) / ( 4.0 * 8.0 );
 
 	if ( damage > 0.5 ) {
 
-		const pp = _getPlayerPos !== null ? _getPlayerPos() : { x: 0, y: 0, z: 0 };
 		apply_damage_to_player( damage, pp.x, pp.y, pp.z );
 
 	}
