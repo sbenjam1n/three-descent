@@ -8,7 +8,7 @@ import { game_init, game_set_mine, game_loop, game_set_player_start, game_set_pl
 import { load_game_data, get_Gamesave_num_org_robots } from './gamesave.js';
 import { Polygon_models, SHAREWARE_MODEL_TABLE, buildModelMesh, buildAnimatedModelMesh, polyobj_set_glow, compute_engine_glow, polyobj_rebuild_glow_refs } from './polyobj.js';
 import { OBJ_PLAYER, OBJ_ROBOT, OBJ_CNTRLCEN, OBJ_CLUTTER, OBJ_HOSTAGE, OBJ_POWERUP, RT_POLYOBJ, RT_POWERUP, RT_HOSTAGE,
-	init_objects, obj_set_segments, OF_SHOULD_BE_DEAD } from './object.js';
+	init_objects, obj_set_segments, OF_SHOULD_BE_DEAD, PolyObjInfo } from './object.js';
 import { wall_set_externals, wall_set_render_callback, wall_set_player_callbacks, wall_set_illusion_callback, wall_set_explosion_callback, wall_set_explode_wall_callback, wall_init_door_textures, wall_reset, wall_toggle } from './wall.js';
 import { collide_set_externals, apply_damage_to_player, collide_robot_and_weapon, collide_weapon_and_wall, collide_badass_explosion, collide_player_and_powerup, collide_player_and_nasty_robot, collide_robot_and_player, collide_player_and_controlcen, collide_player_and_clutter, drop_player_eggs, scrape_object_on_wall } from './collide.js';
 import { init_special_effects, effects_set_externals, effects_set_render_callback, reset_special_effects } from './effects.js';
@@ -2396,7 +2396,11 @@ function spawnMatcenRobot( segnum, robotType, pos_x, pos_y, pos_z, matcenNum ) {
 		orient_uvec_x: 0, orient_uvec_y: 1, orient_uvec_z: 0,
 		orient_rvec_x: 1, orient_rvec_y: 0, orient_rvec_z: 0,
 		ctype: { behavior: 0x81 },	// AIB_NORMAL
-		rtype: { model_num: modelNum }
+		// Must be a real PolyObjInfo, not a bare object: the robot animation code
+		// (do_silly_animation) reads rtype.anim_angles, which only PolyObjInfo
+		// allocates. A plain { model_num } threw and froze the game when a matcen
+		// or boss spawned a robot.
+		rtype: Object.assign( new PolyObjInfo(), { model_num: modelNum } )
 	};
 
 	// Set shields from Robot_info if available
@@ -2582,7 +2586,11 @@ function spawnGatedRobot( segnum, robotType, pos_x, pos_y, pos_z ) {
 		orient_uvec_x: 0, orient_uvec_y: 1, orient_uvec_z: 0,
 		orient_rvec_x: 1, orient_rvec_y: 0, orient_rvec_z: 0,
 		ctype: { behavior: 0x81 },	// AIB_NORMAL
-		rtype: { model_num: modelNum },
+		// Must be a real PolyObjInfo, not a bare object: the robot animation code
+		// (do_silly_animation) reads rtype.anim_angles, which only PolyObjInfo
+		// allocates. A plain { model_num } threw and froze the game when a matcen
+		// or boss spawned a robot.
+		rtype: Object.assign( new PolyObjInfo(), { model_num: modelNum } ),
 		mtype: { mass: 4.0 },
 		matcen_creator: - 1	// BOSS_GATE_MATCEN_NUM — tags this as a boss-gated robot
 	};
