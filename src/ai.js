@@ -2678,6 +2678,15 @@ function do_ai_for_robot( robot, playerPos, robotIndex ) {
 			const applyDamage = ( ailp.bump_cooldown <= 0 );
 			_onBumpPlayer( robot, ailp.vel_x, ailp.vel_y, ailp.vel_z, robotMass, applyDamage );
 
+			// Anti-slide: while pinned against the player, strip the robot's
+			// tangential (orbit/strafe) velocity so it stays *caught* instead of
+			// sliding around you. Keep the component along the player direction
+			// so it can still be shoved forward or back off.
+			const vn = ailp.vel_x * dirToPlayer_x + ailp.vel_y * dirToPlayer_y + ailp.vel_z * dirToPlayer_z;
+			ailp.vel_x = dirToPlayer_x * vn + ( ailp.vel_x - dirToPlayer_x * vn ) * 0.15;
+			ailp.vel_y = dirToPlayer_y * vn + ( ailp.vel_y - dirToPlayer_y * vn ) * 0.15;
+			ailp.vel_z = dirToPlayer_z * vn + ( ailp.vel_z - dirToPlayer_z * vn ) * 0.15;
+
 			if ( applyDamage ) {
 
 				ailp.bump_cooldown = BUMP_COOLDOWN;
