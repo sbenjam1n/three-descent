@@ -9,12 +9,12 @@ import {
 } from './segment.js';
 import {
 	Vertices, Segments, Num_segments, Textures,
-	NumTextures, Side_to_verts
+	NumTextures, Side_to_verts, Walls
 } from './mglobal.js';
 import { BM_FLAG_TRANSPARENT, BM_FLAG_SUPER_TRANSPARENT, BM_FLAG_RLE } from './piggy.js';
 import { decode_tmap_num2, texmerge_get_cached_bitmap } from './texmerge.js';
 import { Effects, Num_effects } from './bm.js';
-import { wall_is_doorway, WID_RENDPAST_FLAG } from './wall.js';
+import { wall_is_doorway, WID_RENDPAST_FLAG, WALL_OPEN } from './wall.js';
 import { config_get_texture_filtering, config_on_texture_filtering_changed } from './config.js';
 
 // Convert Descent coordinate system to Three.js
@@ -544,6 +544,14 @@ export function buildMineGeometry( pigFile, palette ) {
 
 				// Door/wall sides get individual meshes for dynamic texture updates
 				if ( side.wall_num !== - 1 ) {
+
+					// WALL_OPEN sides are invisible openings — passable connector /
+					// trigger walls (matcen and trap triggers). The original never
+					// draws them (WID_NO_WALL has no render flag); we must skip them
+					// too, or they appear as solid walls. The segment beyond still
+					// renders through the opening via portal culling.
+					const w = Walls[ side.wall_num ];
+					if ( w !== undefined && w.type === WALL_OPEN ) continue;
 
 					const mesh = buildSideMesh( segnum, sidenum, pigFile, palette );
 					if ( mesh !== null ) {
