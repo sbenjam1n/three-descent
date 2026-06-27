@@ -124,6 +124,8 @@ let playerKills = 0;
 // --- Getters for external access ---
 export function gameseq_get_difficulty() { return Difficulty_level; }
 export function gameseq_set_difficulty( d ) { Difficulty_level = d; }
+export function gameseq_get_level() { return currentLevelNum; }
+export function gameseq_set_level( n ) { currentLevelNum = n; }
 export function gameseq_get_secondary_ammo() { return playerSecondaryAmmo; }
 export function gameseq_get_sound_initialized() { return soundInitialized; }
 export function gameseq_set_sound_initialized( v ) { soundInitialized = v; }
@@ -2912,6 +2914,9 @@ export async function restartGame() {
 	const menuResult = await do_main_menu( _hogFile, Difficulty_level, _palette );
 	Difficulty_level = menuResult.difficulty;
 
+	// Web build: NEW GAME lets the player pick any starting level.
+	const startLevel = ( menuResult.level != null ) ? menuResult.level : 1;
+
 	// Reset all player state
 	playerScore = 0;
 	playerLastScore = 0;
@@ -2937,8 +2942,8 @@ export async function restartGame() {
 	set_primary_weapon( 0 );
 	set_secondary_weapon( 0 );
 
-	// Reset to level 1
-	currentLevelNum = 1;
+	// Start at the chosen level
+	currentLevelNum = startLevel;
 	Automap_visited.fill( 0 );
 	cntrlcen_reset();
 	gauges_set_white_flash( 0 );
@@ -2949,8 +2954,8 @@ export async function restartGame() {
 	game_set_controls_enabled( true );
 	game_reset_physics();
 
-	// Show briefing screens for level 1
-	await do_briefing_screens( _hogFile, 1, _pigFile, _palette );
+	// Show briefing screens for the chosen starting level
+	await do_briefing_screens( _hogFile, currentLevelNum, _pigFile, _palette );
 	hide_title_canvas();
 
 	songs_play_level_song( currentLevelNum );

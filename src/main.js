@@ -13,7 +13,7 @@ import { do_main_menu } from './menu.js';
 import { gamefont_init } from './gamefont.js';
 import { gameseq_set_externals, gameseq_get_difficulty, gameseq_set_difficulty,
 	gameseq_get_secondary_ammo, gameseq_set_sound_initialized,
-	loadLevel } from './gameseq.js';
+	gameseq_set_level, loadLevel } from './gameseq.js';
 import { mission_get_level_name } from './mission.js';
 
 const status = document.getElementById( 'status' );
@@ -168,27 +168,33 @@ async function startGame() {
 	songs_resume();
 	songs_play_song( SONG_TITLE, true );
 
-	// Show main menu (NEW GAME → difficulty selection)
+	// Show main menu (NEW GAME → difficulty selection → level selection)
 	const menuResult = await do_main_menu( hogFile, gameseq_get_difficulty(), palette );
 	gameseq_set_difficulty( menuResult.difficulty );
+
+	// Web build: NEW GAME lets the player pick any starting level.
+	const startLevel = ( menuResult.level != null ) ? menuResult.level : 1;
+	gameseq_set_level( startLevel );
 
 	// Starting concussion missiles depend on difficulty
 	gameseq_get_secondary_ammo()[ 0 ] = 2 + 4 - gameseq_get_difficulty();
 
-	// Show intro briefing screens (level 0 + level 1)
-	await do_briefing_screens( hogFile, 1, pigFile, palette );
+	// Show briefing screens for the chosen starting level
+	await do_briefing_screens( hogFile, startLevel, pigFile, palette );
 
 	// Hide title canvas and start gameplay
 	hide_title_canvas();
 
-	// Load the first level
-	setStatus( 'Loading level 1...' );
-	songs_play_level_song( 1 );
+	// Load the chosen level
+	setStatus( 'Loading level ' + startLevel + '...' );
+	songs_play_level_song( startLevel );
 
-	let firstLevelName = mission_get_level_name( 1 );
+	let firstLevelName = mission_get_level_name( startLevel );
 	if ( firstLevelName.length <= 0 ) {
 
-		firstLevelName = pigFile.isShareware === true ? 'level01.sdl' : 'level01.rdl';
+		const ext = pigFile.isShareware === true ? '.sdl' : '.rdl';
+		const num = startLevel < 10 ? '0' + startLevel : '' + startLevel;
+		firstLevelName = 'level' + num + ext;
 
 	}
 
