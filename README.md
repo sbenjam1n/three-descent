@@ -4,7 +4,9 @@ A port of Descent to Three.js.
 
 ### Play
 
-https://mrdoob.github.io/three-descent/
+https://sbenjam1n.github.io/three-descent/
+
+Upstream: https://mrdoob.github.io/three-descent/
 
 ### Dev Log
 
