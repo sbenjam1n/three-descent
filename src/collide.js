@@ -198,10 +198,13 @@ export function bump_two_objects( robot, robotVel_x, robotVel_y, robotVel_z, rob
 // Ported from: collide_robot_and_player() in COLLIDE.C lines 1052-1066
 // Called from ai.js when robot is within contact distance of player
 // ---------------------------------------------------------------
-// Margin added to the robot's bounding-sphere radius for the player's resting
-// contact distance. Small so the camera sits right up against the enemy (like
-// DOS), but non-zero so it never clips inside the model.
-const PLAYER_CONTACT_MARGIN = 0.5;
+// Resting contact distance as a fraction of the robot's bounding-sphere
+// radius. obj.size encloses the *whole* model (outstretched limbs and all),
+// so resting at the full radius parks the camera far from the visible body.
+// Resting at ~0.6 of it puts the player right up against the enemy like DOS,
+// while staying outside the actual geometry for most approach angles.
+const PLAYER_CONTACT_FRACTION = 0.6;
+const PLAYER_CONTACT_MIN = 1.5;
 
 export function collide_robot_and_player( robot, robotVel_x, robotVel_y, robotVel_z, robotMass, applyDamage ) {
 
@@ -221,8 +224,8 @@ export function collide_robot_and_player( robot, robotVel_x, robotVel_y, robotVe
 	nx /= dist; ny /= dist; nz /= dist;
 
 	// Surface contact distance: the player should rest right on the robot's
-	// surface, never inside it and never floating far away.
-	const contactDist = obj.size + PLAYER_CONTACT_MARGIN;
+	// body, never floating far out at the bounding-sphere edge.
+	const contactDist = Math.max( obj.size * PLAYER_CONTACT_FRACTION, PLAYER_CONTACT_MIN );
 	const penetration = contactDist - dist;
 
 	const playerMass = 4.0; // PLAYER_MASS
