@@ -426,18 +426,18 @@ function buildSideMesh( segnum, sidenum, pigFile, palette ) {
 	geometry.setAttribute( 'uv', new THREE.Float32BufferAttribute( uvs, 2 ) );
 	geometry.setAttribute( 'color', new THREE.Float32BufferAttribute( colors, 3 ) );
 
-	const material = getMaterial( result.texture, result.isTransparent );
+	// Each door/wall side gets its OWN material — never the shared material
+	// cache. Its texture is swapped per frame during door animation
+	// (updateDoorMesh mutates mesh.material.map), so a material shared between
+	// every door using the same texture would make them all animate in lockstep
+	// — i.e. opening one door visually opens every door of that type.
+	const material = new THREE.MeshBasicMaterial( {
+		map: result.texture,
+		alphaTest: result.isTransparent ? 0.5 : 0,
+		vertexColors: true
+	} );
 
-	const mesh = new THREE.Mesh( geometry, material );
-
-	// Visibility is driven entirely by our portal culling (mesh.visible per
-	// segment). Leaving Three.js per-mesh frustum culling on can additionally
-	// drop a door/wall mesh whose small bounding sphere falls just outside the
-	// frustum even though the room around it (a single big BatchedMesh) still
-	// renders — leaving the door see-through onto whatever is behind it.
-	mesh.frustumCulled = false;
-
-	return mesh;
+	return new THREE.Mesh( geometry, material );
 
 }
 
@@ -910,30 +910,6 @@ function buildVisibleSegments( startSegnum, camera ) {
 				_bfsQueue[ _bfsQueueLength ++ ] = child;
 
 			}
-
-		}
-
-	}
-
-	// Expand the visible set by one ring: also render every segment directly
-	// adjacent to a visible one (including across closed doors/walls). The portal
-	// BFS can leave a segment just past a portal unvisited when the AABB-vs-frustum
-	// test rejects it, which shows up as a see-through hole or a door that looks
-	// open onto a void from a distance. Rendering one extra ring guarantees the
-	// geometry on the far side of anything visible is present; closed doors stay
-	// opaque and simply occlude it. Snapshot first so we don't ring off the ring.
-	const ringSeeds = [];
-	for ( const segnum of _visibleSegments ) ringSeeds.push( segnum );
-
-	for ( let r = 0; r < ringSeeds.length; r ++ ) {
-
-		const seg = Segments[ ringSeeds[ r ] ];
-		if ( seg === undefined ) continue;
-
-		for ( let side = 0; side < 6; side ++ ) {
-
-			const child = seg.children[ side ];
-			if ( child >= 0 ) _visibleSegments.add( child );
 
 		}
 
