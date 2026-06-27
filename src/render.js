@@ -821,6 +821,7 @@ export function buildMineGeometry( pigFile, palette ) {
 // Pre-allocated objects for frustum culling (Golden Rule #5)
 const _frustum = new THREE.Frustum();
 const _projScreenMatrix = new THREE.Matrix4();
+const _camMatrixWorldInverse = new THREE.Matrix4();
 const _portalBox = new THREE.Box3();
 const _portalPoint = new THREE.Vector3();
 
@@ -830,8 +831,16 @@ function buildVisibleSegments( startSegnum, camera ) {
 
 	if ( startSegnum < 0 || startSegnum >= Num_segments ) return;
 
+	// Refresh the camera's world matrix before building the frustum. The renderer
+	// only updates matrixWorldInverse during render(), which runs *after* this, so
+	// without this the frustum lags one frame behind the camera — segments that
+	// just came into view (e.g. when entering a room) get culled and render as a
+	// void until the next frame.
+	camera.updateMatrixWorld();
+	_camMatrixWorldInverse.copy( camera.matrixWorld ).invert();
+
 	// Build frustum from camera matrices
-	_projScreenMatrix.multiplyMatrices( camera.projectionMatrix, camera.matrixWorldInverse );
+	_projScreenMatrix.multiplyMatrices( camera.projectionMatrix, _camMatrixWorldInverse );
 	_frustum.setFromProjectionMatrix( _projScreenMatrix );
 
 	_visibleSegments.add( startSegnum );
