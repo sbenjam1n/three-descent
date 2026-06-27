@@ -199,12 +199,19 @@ export function bump_two_objects( robot, robotVel_x, robotVel_y, robotVel_z, rob
 // Called from ai.js when robot is within contact distance of player
 // ---------------------------------------------------------------
 // Resting contact distance as a fraction of the robot's bounding-sphere
-// radius. obj.size encloses the *whole* model (outstretched limbs and all),
-// so resting at the full radius parks the camera far from the visible body.
-// Resting at ~0.6 of it puts the player right up against the enemy like DOS,
-// while staying outside the actual geometry for most approach angles.
-const PLAYER_CONTACT_FRACTION = 0.6;
+// radius. The depenetration below is the only thing that physically *blocks*
+// the player, so this must cover the robot's visible body — too small and the
+// player clips through the body (between this radius and obj.size) without
+// ever being stopped. Keep it near the full bounding radius for reliable
+// blocking; a slight shave (0.9) gets the camera a touch closer without
+// opening a pass-through gap.
+const PLAYER_CONTACT_FRACTION = 0.9;
 const PLAYER_CONTACT_MIN = 1.5;
+
+// Per-frame friction on the player's sideways (tangential) velocity while in
+// contact. Without this the player slides around the contact sphere — the
+// "orbital" feel. <1 makes the player stick to the surface instead.
+const PLAYER_CONTACT_FRICTION = 0.5;
 
 export function collide_robot_and_player( robot, robotVel_x, robotVel_y, robotVel_z, robotMass, applyDamage ) {
 
@@ -264,17 +271,19 @@ export function collide_robot_and_player( robot, robotVel_x, robotVel_y, robotVe
 		obj.pos_y -= ny * penetration * 0.2;
 		obj.pos_z -= nz * penetration * 0.2;
 
-		// Kill the player's inward velocity component so they don't keep
-		// accelerating into the robot — they stay "caught" at the surface and
-		// only the steady thrust pushes the robot forward.
-		const inward = pv.x * ( - nx ) + pv.y * ( - ny ) + pv.z * ( - nz );
-		if ( inward > 0 ) {
+		// Split the player's velocity into radial (along the normal) and
+		// tangential (sideways) parts. Cancel any inward radial motion so the
+		// player can't burrow into the robot, and apply friction to the
+		// tangential part so they stick to the surface instead of orbiting it.
+		const radial = pv.x * nx + pv.y * ny + pv.z * nz; // >0 = moving outward
+		const tx = pv.x - radial * nx;
+		const ty = pv.y - radial * ny;
+		const tz = pv.z - radial * nz;
+		const outward = radial > 0 ? radial : 0; // keep separating motion only
 
-			pv.x -= ( - nx ) * inward;
-			pv.y -= ( - ny ) * inward;
-			pv.z -= ( - nz ) * inward;
-
-		}
+		pv.x = nx * outward + tx * PLAYER_CONTACT_FRICTION;
+		pv.y = ny * outward + ty * PLAYER_CONTACT_FRICTION;
+		pv.z = nz * outward + tz * PLAYER_CONTACT_FRICTION;
 
 	}
 
